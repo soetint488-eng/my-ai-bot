@@ -18,7 +18,7 @@ def run_dummy_server():
 threading.Thread(target=run_dummy_server, daemon=True).start()
 
 # --- Bot ရဲ့ အချက်အလက်များ ---
-TOKEN = "8428992244:AAErRzANg_HUlKnJkI-MclY9T_uV0B-p2O0"
+TOKEN = "8428992244:AAErRzANg_HUlKnJkI-MclY9T_uV0B-p2OO"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("မင်္ဂလာပါ အစ်ကို! ကျွန်တော်က AI Bot ပါ။ ကြိုက်တာမေးလို့ရသလို၊ App တွေလည်း ထုတ်ခိုင်းလို့ရပါတယ်ခင်ဗျာ။")

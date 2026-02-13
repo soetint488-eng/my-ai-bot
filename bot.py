@@ -4,45 +4,48 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import os
 
-# --- Settings ---
-TOKEN = "8428992244:AAERrZANg_HUlKnJkDhcFRK0tVSdqvQDwV8"
+TOKEN = "8428992244:AAErRzANg_HUlKnJkI-MclY9T_uV0B-p2O0"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("မင်္ဂလာပါ! Cloud ပေါ်ကနေ အလုပ်လုပ်နေပါပြီ။ လိုချင်တဲ့ App အကြောင်း ပြောပြပါ။")
+    await update.message.reply_text("မင်္ဂလာပါ! ကျွန်တော်က AI Bot ပါ။ ကြိုက်တာမေးလို့ရသလို၊ App တွေလည်း ထုတ်ခိုင်းလို့ရပါတယ်ခင်ဗျာ။")
 
-async def generate_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_prompt = update.message.text
-    status_msg = await update.message.reply_text("⏳ AI က ကုဒ်တွေ ရေးနေပါပြီ...")
-
+async def chat_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text
+    status_msg = await update.message.reply_text("⏳ စဉ်းစားနေပါတယ် ခဏလေးနော်...")
+    
     try:
-        encoded_prompt = urllib.parse.quote(f"Write a full single-file HTML/CSS/JS mobile app for: {user_prompt}. Use Burmese.")
-        api_url = f"https://api.siputzx.my.id/api/ai/llama3?prompt={encoded_prompt}"
-        
-        response = requests.get(api_url, timeout=60)
-        app_code = response.json().get("data") or response.json().get("result")
+        # AI API ကို ခေါ်ယူခြင်း
+        encoded_text = urllib.parse.quote(user_text)
+        url = f"https://sandipbaruwal.onrender.com/gemini?prompt={encoded_text}"
+        response = requests.get(url)
+        result = response.json()
+        ai_reply = result.get("answer", "")
 
-        if app_code:
-            if "```html" in app_code:
-                app_code = app_code.split("```html")[1].split("```")[0]
-            elif "```" in app_code:
-                 app_code = app_code.split("```")[1].split("```")[0]
+        # Logic 1: အကယ်၍ ကုဒ်တွေ (HTML) ပါလာရင် ဖိုင်အနေနဲ့ ပို့ပေးမယ်
+        if "```html" in ai_reply or "<!DOCTYPE html>" in ai_reply:
+            await status_msg.edit_text("✅ App ကုဒ်တွေ ရပါပြီ၊ ဖိုင်ထုတ်ပေးနေပါတယ်...")
             
-            file_name = "index.html"
-            with open(file_name, "w", encoding="utf-8") as f:
-                f.write(app_code.strip())
+            # HTML ကုဒ်ကို သီးသန့်ထုတ်ယူခြင်း
+            file_content = ai_reply
+            with open("app.html", "w", encoding="utf-8") as f:
+                f.write(file_content)
+            
+            with open("app.html", "rb") as f:
+                await update.message.reply_document(document=f, filename="your_app.html", caption="အစ်ကို ခိုင်းထားတဲ့ App လေး ရပါပြီဗျာ!")
+        
+        # Logic 2: သာမန် စကားပြောဆိုရင် စာသားပဲ ပြန်ဖြေမယ်
+        else:
+            await status_msg.edit_text(ai_reply)
 
-            await update.message.reply_document(document=open(file_name, 'rb'), caption="✅ App ရပါပြီ!")
-            await status_msg.delete()
     except Exception as e:
-        await status_msg.edit_text(f"❌ Error: {str(e)}")
+        await status_msg.edit_text("တောင်းပန်ပါတယ်၊ အခုချိန်မှာ AI ခဏ နားနေလို့ပါ။ နောက်မှ ပြန်မေးပေးပါနော်။")
 
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generate_app))
-    
-    print("Bot is starting on Cloud...")
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_ai))
+    print("Bot is running...")
     app.run_polling()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

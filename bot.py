@@ -4,7 +4,20 @@ import asyncio
 import edge_tts
 import os
 import sqlite3
+import threading
+import http.server
+import socketserver
 
+# --- Render Port Binding (Error မတက်အောင် Dummy Server Run ခြင်း) ---
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 8080))
+    handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", port), handler) as httpd:
+        httpd.serve_forever()
+
+threading.Thread(target=run_dummy_server, daemon=True).start()
+
+# --- Bot Setup ---
 API_TOKEN = '8463257017:AAHQH_bFCF1ENzJtwy_zswp1VywkofI4nA0'
 CHANNEL_USERNAME = '@KCTagain007'
 bot = telebot.TeleBot(API_TOKEN)
@@ -41,16 +54,17 @@ def is_subscribed(user_id):
         return False
 
 def get_user_count():
-    conn = sqlite3.connect('voice_bot.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM users')
     try:
+        conn = sqlite3.connect('voice_bot.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM users')
         count = cursor.fetchone()[0]
+        conn.close()
+        return count
     except:
-        count = 0
-    conn.close()
-    return count
+        return 0
 
+# --- Start / Settings / Profile ---
 @bot.message_handler(commands=['start', 'settings', 'profile'])
 def start_and_settings(message):
     user_id = message.from_user.id
@@ -72,14 +86,11 @@ def start_and_settings(message):
     count = get_user_count()
     
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_speed_up = types.InlineKeyboardButton("🚀 Speed +", callback_data="speed_up")
-    btn_speed_down = types.InlineKeyboardButton("🐌 Speed -", callback_data="speed_down")
-    btn_pitch_up = types.InlineKeyboardButton("📢 Pitch +", callback_data="pitch_up")
-    btn_pitch_down = types.InlineKeyboardButton("🔉 Pitch -", callback_data="pitch_down")
-    btn_reset = types.InlineKeyboardButton("🔄 Reset", callback_data="reset")
-    
-    markup.add(btn_speed_up, btn_speed_down, btn_pitch_up, btn_pitch_down)
-    markup.add(btn_reset)
+    markup.add(types.InlineKeyboardButton("🚀 Speed +", callback_data="speed_up"),
+               types.InlineKeyboardButton("🐌 Speed -", callback_data="speed_down"),
+               types.InlineKeyboardButton("📢 Pitch +", callback_data="pitch_up"),
+               types.InlineKeyboardButton("🔉 Pitch -", callback_data="pitch_down"))
+    markup.add(types.InlineKeyboardButton("🔄 Reset", callback_data="reset"))
     
     msg = (f"👤 **Bot Profile & Settings**\n\n"
            f"👥 Total Bot Users: `{count}`\n"
@@ -90,7 +101,8 @@ def start_and_settings(message):
     
     bot.send_message(message.chat.id, msg, reply_markup=markup, parse_mode="Markdown")
 
-@bot.callback_query_handler(func=lambda call: call.data in ["speed_up", "speed_down", "pitch_up", "pitch_down", "reset", "boy", "girl"])
+# --- Callback Handler (ခလုတ်များအတွက်) ---
+@bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     user_id = call.from_user.id
     if not is_subscribed(user_id):
@@ -100,16 +112,16 @@ def handle_callback(call):
     s = get_settings(user_id)
     
     if call.data == "speed_up":
-        val = int(s['speed'].replace('%', '')) + 10
+        val = int(s['speed'].replace('%', '').replace('+', '')) + 10
         s['speed'] = f"+{val}%" if val >= 0 else f"{val}%"
     elif call.data == "speed_down":
-        val = int(s['speed'].replace('%', '')) - 10
+        val = int(s['speed'].replace('%', '').replace('+', '')) - 10
         s['speed'] = f"+{val}%" if val >= 0 else f"{val}%"
     elif call.data == "pitch_up":
-        val = int(s['pitch'].replace('Hz', '')) + 5
+        val = int(s['pitch'].replace('Hz', '').replace('+', '')) + 5
         s['pitch'] = f"+{val}Hz" if val >= 0 else f"{val}Hz"
     elif call.data == "pitch_down":
-        val = int(s['pitch'].replace('Hz', '')) - 5
+        val = int(s['pitch'].replace('Hz', '').replace('+', '')) - 5
         s['pitch'] = f"+{val}Hz" if val >= 0 else f"{val}Hz"
     elif call.data == "reset":
         user_settings[user_id] = {'speed': '+0%', 'pitch': '+0Hz', 'gender': 'girl'}
@@ -120,6 +132,8 @@ def handle_callback(call):
         process_voice_conversion(call.message, user_id)
         return
 
+    bot.answer_callback_query(call.id) # ခလုတ်နှိပ်တာ အောင်မြင်ကြောင်း အသိပေးချက်
+    
     count = get_user_count()
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(types.InlineKeyboardButton("🚀 Speed +", callback_data="speed_up"),
@@ -140,12 +154,8 @@ def handle_callback(call):
 @bot.message_handler(func=lambda m: True)
 def on_message(message):
     user_id = message.from_user.id
-    
     if not is_subscribed(user_id):
-        markup = types.InlineKeyboardMarkup()
-        btn_join = types.InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")
-        markup.add(btn_join)
-        bot.send_message(user_id, f"⚠️ Bot ကိုသုံးဖို့ Channel ကို အရင် Join ပေးပါဗျ။", reply_markup=markup)
+        start_and_settings(message)
         return
 
     user_settings[f"last_text_{user_id}"] = message.text
@@ -170,20 +180,15 @@ def process_voice_conversion(message, user_id):
     msg = bot.send_message(message.chat.id, "⏳ Generating voice...")
     
     try:
-        # AI အသံထုတ်ခြင်း
         asyncio.run(save_voice(text, voice, s['speed'], s['pitch'], file_name))
-        
-        # ဖိုင်ရှိမရှိ အရင်စစ်ဆေးပါ (ဒါကြောင့် Error မတက်တော့ပါ)
         if os.path.exists(file_name):
             with open(file_name, 'rb') as audio:
-                bot.send_voice(message.chat.id, audio, caption=f"🔊 Speed: {s['speed']} | Pitch: {s['pitch']}")
+                bot.send_voice(message.chat.id, audio, caption=f"🔊 Voice: {s['gender']} | Speed: {s['speed']}")
             os.remove(file_name)
         else:
-            bot.send_message(message.chat.id, "⚠️ အသံဖိုင် ထုတ်မရပါ (Connection Error သို့မဟုတ် စာတိုလွန်းနေပါသည်)")
-            
+            bot.send_message(message.chat.id, "⚠️ Error: အသံထုတ်မရပါ")
     except Exception as e:
-        print(f"Error: {e}")
-        bot.send_message(message.chat.id, "⚠️ Error တစ်စုံတစ်ရာ ဖြစ်ပေါ်နေပါသည်။")
+        bot.send_message(message.chat.id, f"⚠️ Error: {str(e)}")
     
     try:
         bot.delete_message(message.chat.id, msg.message_id)

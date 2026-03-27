@@ -6,7 +6,7 @@ import os
 import sqlite3
 
 API_TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI'
-CHANNEL_USERNAME = @aatomk''
+CHANNEL_USERNAME = @aatomk'
 bot = telebot.TeleBot(API_TOKEN)
 
 # Database Setup

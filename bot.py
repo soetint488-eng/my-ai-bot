@@ -5,8 +5,11 @@ import edge_tts
 import os
 import sqlite3
 
+# --- ပြင်ဆင်လိုက်တဲ့အပိုင်း ---
 API_TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI'
-CHANNEL_USERNAME = @aatomk'
+CHANNEL_USERNAME = '@aatomk' # Quote သေချာပိတ်လိုက်ပြီ
+# -------------------------
+
 bot = telebot.TeleBot(API_TOKEN)
 
 # Database Setup
@@ -170,16 +173,18 @@ def process_voice_conversion(message, user_id):
     msg = bot.send_message(message.chat.id, "⏳ Generating voice...")
     
     try:
-        # AI အသံထုတ်ခြင်း
-        asyncio.run(save_voice(text, voice, s['speed'], s['pitch'], file_name))
+        # Loop ထဲမှာ Run ဖို့ ပြင်ဆင်ခြင်း
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(save_voice(text, voice, s['speed'], s['pitch'], file_name))
+        loop.close()
         
-        # ဖိုင်ရှိမရှိ အရင်စစ်ဆေးပါ (ဒါကြောင့် Error မတက်တော့ပါ)
         if os.path.exists(file_name):
             with open(file_name, 'rb') as audio:
                 bot.send_voice(message.chat.id, audio, caption=f"🔊 Speed: {s['speed']} | Pitch: {s['pitch']}")
             os.remove(file_name)
         else:
-            bot.send_message(message.chat.id, "⚠️ အသံဖိုင် ထုတ်မရပါ (Connection Error သို့မဟုတ် စာတိုလွန်းနေပါသည်)")
+            bot.send_message(message.chat.id, "⚠️ အသံဖိုင် ထုတ်မရပါ")
             
     except Exception as e:
         print(f"Error: {e}")

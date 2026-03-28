@@ -4,12 +4,26 @@ import asyncio
 import edge_tts
 import os
 import sqlite3
+from flask import Flask
+from threading import Thread
 
-# --- ပြင်ဆင်လိုက်တဲ့အပိုင်း ---
+# --- Flask Server for Render (Keep Alive) ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is Running!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# --- Bot Configuration ---
 API_TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI'
-CHANNEL_USERNAME = '@aatomk' # Quote သေချာပိတ်လိုက်ပြီ
-# -------------------------
-
+CHANNEL_USERNAME = '@aatomk' 
 bot = telebot.TeleBot(API_TOKEN)
 
 # Database Setup
@@ -75,14 +89,11 @@ def start_and_settings(message):
     count = get_user_count()
     
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_speed_up = types.InlineKeyboardButton("🚀 Speed +", callback_data="speed_up")
-    btn_speed_down = types.InlineKeyboardButton("🐌 Speed -", callback_data="speed_down")
-    btn_pitch_up = types.InlineKeyboardButton("📢 Pitch +", callback_data="pitch_up")
-    btn_pitch_down = types.InlineKeyboardButton("🔉 Pitch -", callback_data="pitch_down")
-    btn_reset = types.InlineKeyboardButton("🔄 Reset", callback_data="reset")
-    
-    markup.add(btn_speed_up, btn_speed_down, btn_pitch_up, btn_pitch_down)
-    markup.add(btn_reset)
+    markup.add(types.InlineKeyboardButton("🚀 Speed +", callback_data="speed_up"),
+               types.InlineKeyboardButton("🐌 Speed -", callback_data="speed_down"),
+               types.InlineKeyboardButton("📢 Pitch +", callback_data="pitch_up"),
+               types.InlineKeyboardButton("🔉 Pitch -", callback_data="pitch_down"))
+    markup.add(types.InlineKeyboardButton("🔄 Reset Settings", callback_data="reset"))
     
     msg = (f"👤 **Bot Profile & Settings**\n\n"
            f"👥 Total Bot Users: `{count}`\n"
@@ -129,7 +140,7 @@ def handle_callback(call):
                types.InlineKeyboardButton("🐌 Speed -", callback_data="speed_down"),
                types.InlineKeyboardButton("📢 Pitch +", callback_data="pitch_up"),
                types.InlineKeyboardButton("🔉 Pitch -", callback_data="pitch_down"))
-    markup.add(types.InlineKeyboardButton("🔄 Reset", callback_data="reset"))
+    markup.add(types.InlineKeyboardButton("🔄 Reset Settings", callback_data="reset"))
     
     msg = (f"👤 **Bot Profile & Settings**\n\n"
            f"👥 Total Bot Users: `{count}`\n"
@@ -143,7 +154,6 @@ def handle_callback(call):
 @bot.message_handler(func=lambda m: True)
 def on_message(message):
     user_id = message.from_user.id
-    
     if not is_subscribed(user_id):
         markup = types.InlineKeyboardMarkup()
         btn_join = types.InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")
@@ -153,16 +163,15 @@ def on_message(message):
 
     user_settings[f"last_text_{user_id}"] = message.text
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("👦 Boy", callback_data="boy"),
-               types.InlineKeyboardButton("👧 Girl", callback_data="girl"))
+    markup.add(types.InlineKeyboardButton("👦 Boy (Thiha)", callback_data="boy"),
+               types.InlineKeyboardButton("👧 Girl (Nilar)", callback_data="girl"))
     bot.send_message(message.chat.id, "ဘယ်သူ့အသံနဲ့ နားထောင်မလဲ?", reply_markup=markup)
 
 def process_voice_conversion(message, user_id):
     text = user_settings.get(f"last_text_{user_id}")
     if not text: return
-    
     s = get_settings(user_id)
-    file_name = f"voice_{user_id}.mp3"
+    file_name = f"KCT_Voice_{user_id}.mp3"
     is_myanmar = any('\u1000' <= char <= '\u109F' for char in text)
     
     if s['gender'] == "boy":
@@ -170,7 +179,7 @@ def process_voice_conversion(message, user_id):
     else:
         voice = "my-MM-NilarNeural" if is_myanmar else "en-US-AvaNeural"
         
-    msg = bot.send_message(message.chat.id, "⏳ Generating voice...")
+    wait_msg = bot.send_message(message.chat.id, "⏳ Generating audio file...")
     
     try:
         # Loop ထဲမှာ Run ဖို့ ပြင်ဆင်ခြင်း
@@ -180,19 +189,26 @@ def process_voice_conversion(message, user_id):
         loop.close()
         
         if os.path.exists(file_name):
+            # ၁။ Play Online (Voice format)
             with open(file_name, 'rb') as audio:
-                bot.send_voice(message.chat.id, audio, caption=f"🔊 Speed: {s['speed']} | Pitch: {s['pitch']}")
+                bot.send_voice(message.chat.id, audio, caption=f"🔊 Play Online\nSpeed: {s['speed']} | Pitch: {s['pitch']}")
+            
+            # ၂။ Downloadable MP3 (Document format)
+            with open(file_name, 'rb') as audio_file:
+                bot.send_document(message.chat.id, audio_file, caption="📥 Download MP3 File")
+                
             os.remove(file_name)
         else:
             bot.send_message(message.chat.id, "⚠️ အသံဖိုင် ထုတ်မရပါ")
-            
     except Exception as e:
         print(f"Error: {e}")
-        bot.send_message(message.chat.id, "⚠️ Error တစ်စုံတစ်ရာ ဖြစ်ပေါ်နေပါသည်။")
+        bot.send_message(message.chat.id, "⚠️ Error ဖြစ်သွားပါပြီဗျ။")
     
     try:
-        bot.delete_message(message.chat.id, msg.message_id)
+        bot.delete_message(message.chat.id, wait_msg.message_id)
     except: pass
 
-print("KCT Voice Bot is running safely...")
-bot.polling(none_stop=True)
+if __name__ == "__main__":
+    print("KCT Voice Bot is starting...")
+    keep_alive() # Keep server alive for Render
+    bot.polling(none_stop=True)

@@ -1,3 +1,5 @@
 pyTelegramBotAPI
+google-generativeai
 edge-tts
+yt-dlp
 flask

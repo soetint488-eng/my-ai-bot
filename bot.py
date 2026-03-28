@@ -9,8 +9,8 @@ from flask import Flask
 from threading import Thread
 
 # --- SETUP ---
-BOT_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI" # သင့် Bot Token အစစ်ကို ဒီမှာထည့်ပါ
-GEMINI_KEY = "AIzaSyA3BIZ1Rf-DLTmyOgfh9n7BNFuBE-8B46c"
+BOT_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
+GEMINI_KEY = "AIzaSyAnOv8Pqe7W2dz84DIICEn11kNUrZdPKqU"
 CHANNEL_USERNAME = "@aatomk"
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -25,7 +25,7 @@ app = Flask('')
 def home():
     return "Bot is Running!"
 
-# --- MUSIC SEARCH ---
+# --- MUSIC SEARCH (/music နာမည်) ---
 @bot.message_handler(commands=['music', 'song'])
 def search_music(message):
     query = message.text.replace('/music', '').replace('/song', '').strip()
@@ -33,9 +33,8 @@ def search_music(message):
         bot.reply_to(message, "💡 သီချင်းရှာရန် နာမည်ရိုက်ပေးပါ။\nဥပမာ- /music လမင်းနားမှာ")
         return
 
-    msg = bot.reply_to(message, f"🔍 '{query}' ကို ရှာနေပါတယ်...")
+    msg = bot.reply_to(message, f"🔍 '{query}' ကို YouTube မှာ ရှာနေပါတယ်...")
     
-    # YouTube Search Options
     ydl_opts = {
         'format': 'best',
         'quiet': True,
@@ -53,38 +52,44 @@ def search_music(message):
 
             bot.delete_message(message.chat.id, msg.message_id)
             
-            for entry in info['entries'][:5]: # သီချင်း ၅ ပုဒ်ပြမယ်
+            for entry in info['entries'][:5]:
                 title = entry.get('title')
-                url = entry.get('url') or f"https://www.youtube.com/watch?v={entry.get('id')}"
+                vid_id = entry.get('id')
                 
                 markup = types.InlineKeyboardMarkup()
-                # Download Links (External API သုံးထားလို့ Render မှာ FFmpeg မလိုဘဲ ဒေါင်းနိုင်ပါမယ်)
-                mp3_link = f"https://api.vevioz.com/api/button/mp3/{entry.get('id')}"
-                mp4_link = f"https://api.vevioz.com/api/button/videos/{entry.get('id')}"
+                # ပိုတည်ငြိမ်တဲ့ Download API (Vevioz)
+                mp3_url = f"https://api.vevioz.com/api/button/mp3/{vid_id}"
+                mp4_url = f"https://api.vevioz.com/api/button/videos/{vid_id}"
                 
-                mp3_btn = types.InlineKeyboardButton("🎵 MP3 Download", url=mp3_link)
-                mp4_btn = types.InlineKeyboardButton("🎬 MP4 Download", url=mp4_link)
-                markup.add(mp3_btn, mp4_btn)
+                markup.add(types.InlineKeyboardButton("🎵 MP3 Download", url=mp3_url))
+                markup.add(types.InlineKeyboardButton("🎬 MP4 Download", url=mp4_url))
                 
                 bot.send_message(message.chat.id, f"🎧 **{title}**", reply_markup=markup, parse_mode="Markdown")
-        except Exception as e:
-            bot.reply_to(message, f"⚠️ ရှာဖွေရာမှာ အမှားရှိသွားပါတယ်: {str(e)}")
+        except:
+            bot.reply_to(message, "⚠️ သီချင်းရှာမရပါဘူးဗျာ။")
 
-# --- GEMINI CHAT + VOICE ---
+# --- GEMINI CHAT + VOICE (စာရိုက်ရင် အသံနဲ့ပြန်ဖြေရန်) ---
 @bot.message_handler(func=lambda message: True)
 def chat_with_gemini(message):
+    # Channel Join စစ်ဆေးခြင်း
     try:
-        # Gemini Response
+        status = bot.get_chat_member(CHANNEL_USERNAME, message.from_user.id).status
+        if status in ['left', 'kicked']:
+            bot.reply_to(message, f"❌ Bot သုံးရန် {CHANNEL_USERNAME} ကို Join ပါ။")
+            return
+    except: pass
+
+    try:
+        # Gemini စာသား ထုတ်ပေးခြင်း
         response = model.generate_content(message.text)
         reply_text = response.text
         
-        # Voice Conversion
+        # အသံပြောင်းခြင်း (edge-tts)
         voice_file = f"v_{message.chat.id}.mp3"
         
         async def make_voice():
-            # စာသားအရမ်းရှည်ရင် ဖြတ်မယ်
-            txt = reply_text[:300]
-            communicate = edge_tts.Communicate(txt, "my-MM-ThihaNeural")
+            # မြန်မာသံ (ThihaNeural) ဖြင့် အသံထွက်ပေးခြင်း
+            communicate = edge_tts.Communicate(reply_text[:300], "my-MM-ThihaNeural")
             await communicate.save(voice_file)
 
         asyncio.run(make_voice())
@@ -96,14 +101,14 @@ def chat_with_gemini(message):
             os.remove(voice_file)
             
     except Exception as e:
-        # Gemini စာသားပဲ အရင်ပို့ကြည့်မယ်
+        # အသံဖိုင် Error တက်ရင်တောင် စာသားတော့ ပြန်ဖြေပေးမယ်
         try:
             response = model.generate_content(message.text)
             bot.reply_to(message, response.text)
         except:
-            bot.reply_to(message, "🤖 Gemini ခေတ္တ အလုပ်မလုပ်ပါဘူးဗျ။")
+            bot.reply_to(message, "🤖 Gemini API ခေတ္တအလုပ်မလုပ်ပါဘူးဗျ။")
 
-# --- RUN SERVER ---
+# --- RUN WEB SERVER ---
 def run():
     app.run(host='0.0.0.0', port=8080)
 

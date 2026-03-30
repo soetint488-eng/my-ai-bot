@@ -1,214 +1,97 @@
 import telebot
 from telebot import types
-import asyncio
+import google.generativeai as genai
 import edge_tts
+import asyncio
+import yt_dlp
 import os
-import sqlite3
+import requests
 from flask import Flask
 from threading import Thread
 
-# --- Flask Server for Render (Keep Alive) ---
+# --- SETUP ---
+BOT_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
+GEMINI_KEY = "AIzaSyAnOv8Pqe7W2dz84DIICEn11kNUrZdPKqU"
+LEAKCHECK_KEY = "c961f5c177273840f4280335163ccbe37519b3df"
+CHANNEL_USERNAME = "@aatomk"
+
+bot = telebot.TeleBot(BOT_TOKEN)
+genai.configure(api_key=GEMINI_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
+
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is Running!"
+    return "Bot is Online!"
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# --- Bot Configuration ---
-API_TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI'
-CHANNEL_USERNAME = '@aatomk' 
-bot = telebot.TeleBot(API_TOKEN)
-
-# Database Setup
-def init_db():
-    conn = sqlite3.connect('voice_bot.db')
-    cursor = conn.cursor()
-    cursor.execute('CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)')
-    conn.commit()
-    conn.close()
-
-init_db()
-
-user_settings = {}
-
-async def save_voice(text, voice, speed, pitch, file_path):
-    try:
-        communicate = edge_tts.Communicate(text, voice, rate=speed, pitch=pitch)
-        await communicate.save(file_path)
-    except Exception as e:
-        print(f"TTS Error: {e}")
-
-def get_settings(user_id):
-    if user_id not in user_settings:
-        user_settings[user_id] = {'speed': '+0%', 'pitch': '+0Hz', 'gender': 'girl'}
-    return user_settings[user_id]
-
-def is_subscribed(user_id):
-    try:
-        status = bot.get_chat_member(CHANNEL_USERNAME, user_id).status
-        return status in ['member', 'administrator', 'creator']
-    except:
-        return False
-
-def get_user_count():
-    conn = sqlite3.connect('voice_bot.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM users')
-    try:
-        count = cursor.fetchone()[0]
-    except:
-        count = 0
-    conn.close()
-    return count
-
-@bot.message_handler(commands=['start', 'settings', 'profile'])
-def start_and_settings(message):
-    user_id = message.from_user.id
-    
-    conn = sqlite3.connect('voice_bot.db')
-    cursor = conn.cursor()
-    cursor.execute('INSERT OR IGNORE INTO users (user_id) VALUES (?)', (user_id,))
-    conn.commit()
-    conn.close()
-
-    if not is_subscribed(user_id):
-        markup = types.InlineKeyboardMarkup()
-        btn_join = types.InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")
-        markup.add(btn_join)
-        bot.send_message(user_id, f"❌ Bot ကို အသုံးပြုရန် {CHANNEL_USERNAME} ကို အရင် Join ပေးပါဦးဗျ။", reply_markup=markup)
+# --- OSINT: FIND PHONE BY USERNAME ---
+@bot.message_handler(commands=['find'])
+def find_user(message):
+    query = message.text.replace('/find', '').strip().replace('@', '')
+    if not query:
+        bot.reply_to(message, "🔍 ရှာဖွေလိုတဲ့ Username ရိုက်ပေးပါဗျ။\nဥပမာ- /find shinethuyaaung")
         return
 
-    s = get_settings(user_id)
-    count = get_user_count()
+    bot.send_message(message.chat.id, f"🔎 '{query}' ကို Leak Database များတွင် ရှာဖွေနေပါသည်...")
     
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(types.InlineKeyboardButton("🚀 Speed +", callback_data="speed_up"),
-               types.InlineKeyboardButton("🐌 Speed -", callback_data="speed_down"),
-               types.InlineKeyboardButton("📢 Pitch +", callback_data="pitch_up"),
-               types.InlineKeyboardButton("🔉 Pitch -", callback_data="pitch_down"))
-    markup.add(types.InlineKeyboardButton("🔄 Reset Settings", callback_data="reset"))
-    
-    msg = (f"👤 **Bot Profile & Settings**\n\n"
-           f"👥 Total Bot Users: `{count}`\n"
-           f"🆔 Your ID: `{user_id}`\n\n"
-           f"🏃 Speed: `{s['speed']}`\n"
-           f"🎼 Pitch: `{s['pitch']}`\n\n"
-           f"စာရိုက်ပြီး အသံပြောင်းနိုင်ပါပြီဗျ။")
-    
-    bot.send_message(message.chat.id, msg, reply_markup=markup, parse_mode="Markdown")
-
-@bot.callback_query_handler(func=lambda call: call.data in ["speed_up", "speed_down", "pitch_up", "pitch_down", "reset", "boy", "girl"])
-def handle_callback(call):
-    user_id = call.from_user.id
-    if not is_subscribed(user_id):
-        bot.answer_callback_query(call.id, "Channel ကို အရင် Join ပါ!")
-        return
-
-    s = get_settings(user_id)
-    
-    if call.data == "speed_up":
-        val = int(s['speed'].replace('%', '')) + 10
-        s['speed'] = f"+{val}%" if val >= 0 else f"{val}%"
-    elif call.data == "speed_down":
-        val = int(s['speed'].replace('%', '')) - 10
-        s['speed'] = f"+{val}%" if val >= 0 else f"{val}%"
-    elif call.data == "pitch_up":
-        val = int(s['pitch'].replace('Hz', '')) + 5
-        s['pitch'] = f"+{val}Hz" if val >= 0 else f"{val}Hz"
-    elif call.data == "pitch_down":
-        val = int(s['pitch'].replace('Hz', '')) - 5
-        s['pitch'] = f"+{val}Hz" if val >= 0 else f"{val}Hz"
-    elif call.data == "reset":
-        user_settings[user_id] = {'speed': '+0%', 'pitch': '+0Hz', 'gender': 'girl'}
-    
-    if call.data in ["boy", "girl"]:
-        s['gender'] = call.data
-        bot.answer_callback_query(call.id, f"Selected {call.data} voice!")
-        process_voice_conversion(call.message, user_id)
-        return
-
-    count = get_user_count()
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(types.InlineKeyboardButton("🚀 Speed +", callback_data="speed_up"),
-               types.InlineKeyboardButton("🐌 Speed -", callback_data="speed_down"),
-               types.InlineKeyboardButton("📢 Pitch +", callback_data="pitch_up"),
-               types.InlineKeyboardButton("🔉 Pitch -", callback_data="pitch_down"))
-    markup.add(types.InlineKeyboardButton("🔄 Reset Settings", callback_data="reset"))
-    
-    msg = (f"👤 **Bot Profile & Settings**\n\n"
-           f"👥 Total Bot Users: `{count}`\n"
-           f"🏃 Speed: `{s['speed']}`\n"
-           f"🎼 Pitch: `{s['pitch']}`")
+    # LeakCheck API Call
+    url = f"https://leakcheck.io/api/v2/query/{query}?type=username"
+    headers = {"Authorization": f"Bearer {LEAKCHECK_KEY}"}
     
     try:
-        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
-    except: pass
-
-@bot.message_handler(func=lambda m: True)
-def on_message(message):
-    user_id = message.from_user.id
-    if not is_subscribed(user_id):
-        markup = types.InlineKeyboardMarkup()
-        btn_join = types.InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")
-        markup.add(btn_join)
-        bot.send_message(user_id, f"⚠️ Bot ကိုသုံးဖို့ Channel ကို အရင် Join ပေးပါဗျ။", reply_markup=markup)
-        return
-
-    user_settings[f"last_text_{user_id}"] = message.text
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("👦 Boy (Thiha)", callback_data="boy"),
-               types.InlineKeyboardButton("👧 Girl (Nilar)", callback_data="girl"))
-    bot.send_message(message.chat.id, "ဘယ်သူ့အသံနဲ့ နားထောင်မလဲ?", reply_markup=markup)
-
-def process_voice_conversion(message, user_id):
-    text = user_settings.get(f"last_text_{user_id}")
-    if not text: return
-    s = get_settings(user_id)
-    file_name = f"KCT_Voice_{user_id}.mp3"
-    is_myanmar = any('\u1000' <= char <= '\u109F' for char in text)
-    
-    if s['gender'] == "boy":
-        voice = "my-MM-ThihaNeural" if is_myanmar else "en-US-GuyNeural"
-    else:
-        voice = "my-MM-NilarNeural" if is_myanmar else "en-US-AvaNeural"
-        
-    wait_msg = bot.send_message(message.chat.id, "⏳ Generating audio file...")
-    
-    try:
-        # Loop ထဲမှာ Run ဖို့ ပြင်ဆင်ခြင်း
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(save_voice(text, voice, s['speed'], s['pitch'], file_name))
-        loop.close()
-        
-        if os.path.exists(file_name):
-            # ၁။ Play Online (Voice format)
-            with open(file_name, 'rb') as audio:
-                bot.send_voice(message.chat.id, audio, caption=f"🔊 Play Online\nSpeed: {s['speed']} | Pitch: {s['pitch']}")
-            
-            # ၂။ Downloadable MP3 (Document format)
-            with open(file_name, 'rb') as audio_file:
-                bot.send_document(message.chat.id, audio_file, caption="📥 Download MP3 File")
-                
-            os.remove(file_name)
+        response = requests.get(url, headers=headers).json()
+        if response.get('success') and response.get('found', 0) > 0:
+            result_text = f"✅ အချက်အလက် {response['found']} ခု တွေ့ရှိရပါသည်-\n\n"
+            for source in response['result'][:3]: # ထိပ်ဆုံး ၃ ခုပဲပြမယ်
+                line = source.get('line', 'N/A')
+                result_text += f"🔹 Data: `{line}`\n"
+            bot.send_message(message.chat.id, result_text, parse_mode="Markdown")
         else:
-            bot.send_message(message.chat.id, "⚠️ အသံဖိုင် ထုတ်မရပါ")
-    except Exception as e:
-        print(f"Error: {e}")
-        bot.send_message(message.chat.id, "⚠️ Error ဖြစ်သွားပါပြီဗျ။")
-    
-    try:
-        bot.delete_message(message.chat.id, wait_msg.message_id)
-    except: pass
+            bot.reply_to(message, "❌ ဒီ Username နဲ့ ပတ်သက်တဲ့ ဖုန်းနံပါတ်/Data ရှာမတွေ့ပါဘူးဗျာ။")
+    except:
+        bot.reply_to(message, "⚠️ API Error ဖြစ်သွားပါတယ်ဗျ။")
 
+# --- MUSIC SEARCH ---
+@bot.message_handler(commands=['music', 'song'])
+def search_music(message):
+    query = message.text.replace('/music', '').replace('/song', '').strip()
+    if not query:
+        bot.reply_to(message, "💡 သီချင်းနာမည် ရိုက်ပေးပါ။")
+        return
+    msg = bot.reply_to(message, "🔍 YouTube မှာ ရှာနေပါတယ်...")
+    ydl_opts = {'format': 'best', 'quiet': True, 'default_search': 'ytsearch5', 'extract_flat': True}
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        try:
+            info = ydl.extract_info(query, download=False)
+            bot.delete_message(message.chat.id, msg.message_id)
+            for entry in info['entries'][:5]:
+                title, vid_id = entry.get('title'), entry.get('id')
+                markup = types.InlineKeyboardMarkup()
+                markup.add(types.InlineKeyboardButton("🎵 MP3", url=f"https://api.vevioz.com/api/button/mp3/{vid_id}"))
+                markup.add(types.InlineKeyboardButton("🎬 MP4", url=f"https://api.vevioz.com/api/button/videos/{vid_id}"))
+                bot.send_message(message.chat.id, f"🎧 **{title}**", reply_markup=markup, parse_mode="Markdown")
+        except: bot.reply_to(message, "⚠️ ရှာမရပါဘူးဗျ။")
+
+# --- GEMINI CHAT + VOICE ---
+@bot.message_handler(func=lambda message: True)
+def chat_handler(message):
+    try:
+        res = model.generate_content(message.text)
+        reply = res.text
+        v_file = f"v_{message.chat.id}.mp3"
+        async def make_v():
+            await edge_tts.Communicate(reply[:300], "my-MM-ThihaNeural").save(v_file)
+        asyncio.run(make_v())
+        with open(v_file, "rb") as f:
+            bot.send_audio(message.chat.id, f, caption=reply)
+        if os.path.exists(v_file): os.remove(v_file)
+    except:
+        try: bot.reply_to(message, model.generate_content(message.text).text)
+        except: bot.reply_to(message, "🤖 Gemini Error တက်နေပါတယ်ဗျ။")
+
+# --- RUN ---
+def run(): app.run(host='0.0.0.0', port=8080)
 if __name__ == "__main__":
-    print("KCT Voice Bot is starting...")
-    keep_alive() # Keep server alive for Render
-    bot.polling(none_stop=True)
+    Thread(target=run).start()
+    bot.infinity_polling()

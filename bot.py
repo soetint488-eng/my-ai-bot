@@ -12,70 +12,55 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "MLBB Helper Bot is Online!"
-
-# --- MENU ---
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton("🔍 ID Check ရန်", callback_data="check_id")
-    btn2 = types.InlineKeyboardButton("💎 စိန်ဈေးနှုန်းကြည့်ရန်", callback_data="view_price")
-    btn3 = types.InlineKeyboardButton("💬 စိန်ဝယ်ယူရန် (Admin)", url="https://t.me/shinethuyaaung") # သင့် Username ပြင်ပါ
-    markup.add(btn1, btn2, btn3)
-    
-    welcome_msg = (
-        "👋 မင်္ဂလာပါဗျ! **Shine Thu Ya** MLBB Helper Bot မှ ကြိုဆိုပါတယ်။\n\n"
-        "စိန်မဝယ်ခင် ID မှန်၊ မမှန် စစ်ဆေးတာနဲ့ ဈေးနှုန်းတွေကို ဒီမှာ အလွယ်တကူ ကြည့်နိုင်ပါတယ်ဗျ။"
-    )
-    bot.send_message(message.chat.id, welcome_msg, reply_markup=markup, parse_mode="Markdown")
-
-# --- CALLBACK HANDLERS ---
-@bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    if call.data == "check_id":
-        bot.answer_callback_query(call.id)
-        bot.send_message(call.message.chat.id, "🆔 စစ်ဆေးလိုသော MLBB ID နှင့် Zone ID ကို ပို့ပေးပါဗျ။\nဥပမာ - `12345678(1234)`")
-    
-    elif call.data == "view_price":
-        bot.answer_callback_query(call.id)
-        price_list = (
-            "💎 **MLBB Diamond Price List**\n\n"
-            "🔹 86 Gems - 2,xxx Ks\n"
-            "🔹 172 Gems - 4,xxx Ks\n"
-            "🔹 257 Gems - 6,xxx Ks\n"
-            "🔹 706 Gems - 1x,xxx Ks\n\n"
-            "⚠️ ဈေးနှုန်း အပြောင်းအလဲ ရှိနိုင်သဖြင့် Admin ကို တိုက်ရိုက်မေးမြန်းနိုင်ပါတယ်ဗျ။"
-        )
-        bot.send_message(call.message.chat.id, price_list, parse_mode="Markdown")
+    return "MLBB Checker Bot is Online!"
 
 # --- ID CHECKER FUNCTION ---
 @bot.message_handler(func=lambda message: "(" in message.text and ")" in message.text)
 def check_ml_id(message):
     text = message.text.strip()
     try:
-        # ID နဲ့ Zone ID ကို ခွဲထုတ်ခြင်း (ဥပမာ- 12345678(1234))
-        user_id = text.split("(")[0]
-        zone_id = text.split("(")[1].replace(")", "")
+        # ID နဲ့ Zone ID ကို ခွဲထုတ်ခြင်း
+        user_id = text.split("(")[0].strip()
+        zone_id = text.split("(")[1].replace(")", "").strip()
         
-        msg = bot.reply_to(message, "🔍 ID ကို စစ်ဆေးနေပါတယ်၊ ခဏစောင့်ပေးပါ...")
+        msg = bot.reply_to(message, "🔍 Server မှာ Name ကို ရှာဖွေနေပါတယ်၊ ခဏစောင့်ပေးပါ...")
 
-        # MLBB ID Checker Public API ကို အသုံးပြုခြင်း
+        # MLBB API (ဒီ API က ID နဲ့ Zone ကို စစ်ပြီး Name ပြပေးပါတယ်)
         api_url = f"https://api.mobilelegends.com/v1/user/info?id={user_id}&zone={zone_id}"
-        # မှတ်ချက် - ဒီ API က အခမဲ့ဖြစ်လို့ တစ်ခါတလေ လေးတတ်ပါတယ်
-        # ပိုမြန်တဲ့ API လိုချင်ရင် ပေးချေရတဲ့ API ကို ပြောင်းသုံးလို့ရပါတယ်
         
-        # နမူနာ အနေဖြင့် ပုံသေ အဖြေထုတ်ပြခြင်း (အောက်က API response စစ်ဆေးမှု လိုအပ်သည်)
-        # အခုလောလောဆယ် API response မပါဘဲ ID Format မှန်ကန်မှုကို အတည်ပြုပေးပါမယ်
-        
-        bot.edit_message_text(
-            f"✅ **ID စစ်ဆေးမှု ရလဒ်**\n\n"
-            f"🆔 ID: `{user_id}`\n"
-            f"🌐 Zone: `{zone_id}`\n\n"
-            f"💡 ဒီ ID ထဲကို စိန်ထည့်မှာ သေချာပြီဆိုရင် Admin ကို ဆက်သွယ်လိုက်ပါဗျ။",
-            chat_id=message.chat.id, message_id=msg.message_id, parse_mode="Markdown"
-        )
+        # ပိုတည်ငြိမ်တဲ့ တခြား API တစ်ခုကိုပါ အရံအနေနဲ့ သုံးပါမယ်
+        backup_api = f"https://smile-one.me/api/checkrole?user_id={user_id}&zone_id={zone_id}&pid=26"
+
+        try:
+            # API ကို လှမ်းခေါ်ခြင်း
+            response = requests.get(backup_api, timeout=10).json()
+            
+            if response.get('status') == 200:
+                username = response.get('username') # User Name ရပြီ
+                
+                result_text = (
+                    "✅ **ID စစ်ဆေးမှု ရလဒ်**\n\n"
+                    f"👤 **Name:** `{username}`\n"
+                    f"🆔 **ID:** `{user_id}`\n"
+                    f"🌐 **Zone:** `{zone_id}`\n\n"
+                    "💡 နာမည်နဲ့ ID မှန်ကန်တယ်ဆိုရင် Admin ဆီမှာ စိန်ဝယ်ယူနိုင်ပါပြီဗျ။"
+                )
+                
+                # အောင်မြင်ရင် ပြန်ပို့မယ်
+                bot.edit_message_text(result_text, chat_id=message.chat.id, message_id=msg.message_id, parse_mode="Markdown")
+            else:
+                bot.edit_message_text("❌ ID ရှာမတွေ့ပါဘူးဗျာ။ ID နဲ့ Zone မှန်အောင် ပြန်ရိုက်ပေးပါဦး။", chat_id=message.chat.id, message_id=msg.message_id)
+                
+        except:
+            bot.edit_message_text("⚠️ API Server ခေတ္တ အလုပ်မလုပ်ပါဘူးဗျ။ နောက်မှ ပြန်စမ်းကြည့်ပါဦး။", chat_id=message.chat.id, message_id=msg.message_id)
+
     except Exception as e:
-        bot.reply_to(message, "⚠️ ID Format မှားယွင်းနေပါတယ်ဗျ။ `ID(Zone)` ပုံစံအတိုင်း ပို့ပေးပါ။")
+        bot.reply_to(message, "⚠️ ID Format မှားယွင်းနေပါတယ်ဗျ။ `ID(Zone)` ပုံစံအတိုင်း ပို့ပေးပါ။\nဥပမာ - `701906179(8798)`")
+
+# --- START MENU ---
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, "👋 မင်္ဂလာပါ! MLBB ID စစ်ဖို့အတွက် `ID(Zone)` ပုံစံအတိုင်း ပို့ပေးပါဗျ။\n\nဥပမာ - `701906179(8798)`")
 
 # --- RUN SERVER ---
 def run():

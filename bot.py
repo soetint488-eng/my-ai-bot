@@ -8,14 +8,13 @@ from aiohttp import web
 
 # --- CONFIG ---
 API_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
-# Key ကို သေချာပြန်စစ်ပြီး ထည့်ပေးပါ (Space တွေ မပါရပါဘူး)
 GROQ_API_KEY = "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"
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 logging.basicConfig(level=logging.INFO)
 
-async def handle(request): return web.Response(text="Bot is Debugging...")
+async def handle(request): return web.Response(text="Llama 3.3 is Online!")
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/', handle)
@@ -31,26 +30,25 @@ async def get_groq_response(user_text):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "llama3-70b-8192",
+        "model": "llama-3.3-70b-specdec", # အသစ်ဆုံးနဲ့ အမြန်ဆုံး Model ပါ
         "messages": [
-            {"role": "system", "content": "You are a helpful assistant. Answer in Myanmar language."},
+            {"role": "system", "content": "You are a helpful assistant. Answer in Myanmar language. Be very polite."},
             {"role": "user", "content": user_text}
         ]
     }
     
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=payload, headers=headers) as resp:
-            # Error တက်ခဲ့ရင် ဘာကြောင့်လဲဆိုတာ ကြည့်ဖို့
             if resp.status != 200:
-                err_text = await resp.text()
-                return f"❌ API Error ({resp.status}): {err_text[:100]}"
+                err_data = await resp.json()
+                return f"❌ API Error: {err_data['error']['message']}"
             
             data = await resp.json()
             return data['choices'][0]['message']['content']
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await message.answer("🤖 **Debug Mode** ✨\nမေးခွန်းတစ်ခုခု မေးကြည့်ပါဗျ။ Error ကို အတိအကျ ပြပေးပါမယ်။")
+    await message.answer("🤖 **ʟʟᴀᴍᴀ 3.3 ᴀɪ** ✨\nမင်္ဂလာပါ! အခု Model အသစ်နဲ့ အဆင်သင့်ဖြစ်ပါပြီဗျ။ သိလိုသမျှ မေးမြန်းနိုင်ပါပြီ။")
 
 @dp.message(F.text)
 async def ai_chat(message: types.Message):
@@ -59,7 +57,7 @@ async def ai_chat(message: types.Message):
         reply = await get_groq_response(message.text)
         await message.reply(reply)
     except Exception as e:
-        await message.reply(f"❌ System Error: {str(e)}")
+        await message.reply("❌ တစ်ခုခု မှားယွင်းနေပါတယ်ဗျ။")
 
 async def main():
     await asyncio.gather(start_web_server(), dp.start_polling(bot))

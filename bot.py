@@ -1,35 +1,38 @@
 import os
-import logging
 import asyncio
-import sqlite3
-import requests
-from datetime import datetime
+import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 from aiohttp import web
 
-# Logging setup
+# --- CONFIG ---
+# သင့် Bot Token ကို ဒီမှာ ထည့်ပါ
+API_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher()
+
+# လက်ရှိ Folder ထဲမှာပဲ Captcha ပုံကို သိမ်းပါမယ်
+current_dir = os.path.dirname(os.path.abspath(__file__))
+SCREENSHOT_PATH = os.path.join(current_dir, "captcha.png")
+
 logging.basicConfig(level=logging.INFO)
 
-# --- CONFIGURATION ---
-# သင့်ရဲ့ Token ကို ဒီမှာ တိုက်ရိုက်ထည့်ထားပေးပါတယ်
-API_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
-SMM_API_KEY = os.getenv("SMM_API_KEY") # Render Environment Variables ထဲမှာ ထည့်ပေးပါ
-SMM_API_URL = "https://justanotherpanel.com/api/v2"
+# Global Driver Variable
+driver = None
 
-FREE_VIEWS_SERVICE_ID = int(os.getenv("FREE_VIEWS_SERVICE_ID", "1")) 
-FREE_LIKES_SERVICE_ID = int(os.getenv("FREE_LIKES_SERVICE_ID", "2"))
+class BotStates(StatesGroup):
+    waiting_for_captcha = State()
 
-DAILY_VIEWS_LIMIT = 100
-DAILY_LIKES_LIMIT = 10
-DB_PATH = "bot_data.db"
-
-# --- RENDER WEB SERVER (To prevent status 1 error) ---
+# --- RENDER WEB SERVER ---
 async def handle(request):
-    return web.Response(text="TikTok Boost Bot is Running!")
+    return web.Response(text="Zefoy Captcha Bot is Live!")
 
 async def start_web_server():
     app = web.Application()
@@ -39,122 +42,96 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 8080))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    logging.info(f"Web server started on port {port}")
 
-# --- DATABASE SETUP ---
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            views_today INTEGER DEFAULT 0,
-            likes_today INTEGER DEFAULT 0,
-            last_reset TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-def get_user_data(user_id):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT views_today, likes_today, last_reset FROM users WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    today = datetime.now().strftime("%Y-%m-%d")
+# --- SELENIUM BROWSER INIT ---
+def init_browser():
+    global driver
+    chrome_options = Options()
+    chrome_options.add_argument("--headless") # Render မှာ Screen မရှိလို့ သုံးရမည်
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
     
-    if row:
-        views, likes, last_reset = row
-        if last_reset != today:
-            cursor.execute("UPDATE users SET views_today = 0, likes_today = 0, last_reset = ? WHERE user_id = ?", (today, user_id))
-            conn.commit()
-            views, likes = 0, 0
-    else:
-        cursor.execute("INSERT INTO users (user_id, views_today, likes_today, last_reset) VALUES (?, 0, 0, ?)", (user_id, today))
-        conn.commit()
-        views, likes = 0, 0
-    conn.close()
-    return views, likes
+    # Render ပေါ်မှာ Chrome လမ်းကြောင်းကို ရှာရန်
+    chrome_bin = os.environ.get("GOOGLE_CHROME_BIN")
+    if chrome_bin:
+        chrome_options.binary_location = chrome_bin
 
-def update_user_usage(user_id, views_add=0, likes_add=0):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET views_today = views_today + ?, likes_today = likes_today + ? WHERE user_id = ?", (views_add, likes_add, user_id))
-    conn.commit()
-    conn.close()
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
 # --- BOT HANDLERS ---
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
-
-class OrderStates(StatesGroup):
-    waiting_for_link = State()
-
-def main_menu():
-    builder = ReplyKeyboardBuilder()
-    builder.button(text="🎁 Free Views (100)")
-    builder.button(text="💝 Free Likes (10)")
-    builder.button(text="👤 My Profile")
-    builder.button(text="📊 Status")
-    builder.adjust(2)
-    return builder.as_markup(resize_keyboard=True)
-
-def smm_api_call(action, **kwargs):
-    payload = {"key": SMM_API_KEY, "action": action}
-    payload.update(kwargs)
-    try:
-        response = requests.post(SMM_API_URL, data=payload)
-        return response.json()
-    except:
-        return {"error": "Connection Failed"}
 
 @dp.message(Command("start"))
-async def start_cmd(message: types.Message):
-    init_db()
-    await message.answer("👋 *TikTok Free Booster* မှ ကြိုဆိုပါတယ်ဗျ!\nအောက်က Menu ကို သုံးနိုင်ပါပြီ။", parse_mode="Markdown", reply_markup=main_menu())
+async def cmd_start(message: types.Message):
+    await message.answer(
+        "👋 **Zefoy Automation Bot** မှ ကြိုဆိုပါတယ်!\n\n"
+        "စတင်ရန် /get_captcha ကို နှိပ်ပါဗျ။\n"
+        "ပုံရလာရင် စာလုံးကို ရိုက်ထည့်ပေးရမှာ ဖြစ်ပါတယ်။",
+        parse_mode="Markdown"
+    )
 
-@dp.message(F.text.contains("Free Views"))
-async def free_views(message: types.Message, state: FSMContext):
-    views, _ = get_user_data(message.from_user.id)
-    if views >= DAILY_VIEWS_LIMIT:
-        await message.answer("❌ ဒီနေ့အတွက် Limit ပြည့်သွားပါပြီ။")
-        return
-    await state.update_data(service_id=FREE_VIEWS_SERVICE_ID, amount=DAILY_VIEWS_LIMIT, type="views")
-    await message.answer("🔗 TikTok Video Link ပို့ပေးပါဗျ။")
-    await state.set_state(OrderStates.waiting_for_link)
+@dp.message(Command("get_captcha"))
+async def get_captcha(message: types.Message, state: FSMContext):
+    global driver
+    wait_msg = await message.answer("⏳ Zefoy ကို ဖွင့်နေပါတယ်... (၅ စက္ကန့်ခန့် စောင့်ပါ)")
+    
+    try:
+        if driver is None:
+            init_browser()
+        
+        driver.get("https://zefoy.com/")
+        await asyncio.sleep(5) # Page Load ဖြစ်အောင် စောင့်ခြင်း
+        
+        # Screenshot ရိုက်ခြင်း
+        driver.save_screenshot(SCREENSHOT_PATH)
+        
+        # ပုံကို Telegram သို့ ပို့ခြင်း
+        if os.path.exists(SCREENSHOT_PATH):
+            photo = types.FSInputFile(SCREENSHOT_PATH)
+            await bot.send_photo(
+                message.chat.id, 
+                photo, 
+                caption="📸 Captcha ပုံ ရပါပြီ။ စာလုံးကို ရိုက်ထည့်ပေးပါဗျ။"
+            )
+            await state.set_state(BotStates.waiting_for_captcha)
+        else:
+            await message.answer("❌ Screenshot ရိုက်လို့ မရပါဘူးဗျ။")
+            
+        await wait_msg.delete()
+        
+    except Exception as e:
+        logging.error(f"Error: {e}")
+        await message.answer(f"❌ Error တက်သွားပါတယ်: {str(e)}")
 
-@dp.message(F.text.contains("Free Likes"))
-async def free_likes(message: types.Message, state: FSMContext):
-    _, likes = get_user_data(message.from_user.id)
-    if likes >= DAILY_LIKES_LIMIT:
-        await message.answer("❌ ဒီနေ့အတွက် Limit ပြည့်သွားပါပြီ။")
-        return
-    await state.update_data(service_id=FREE_LIKES_SERVICE_ID, amount=DAILY_LIKES_LIMIT, type="likes")
-    await message.answer("🔗 TikTok Video Link ပို့ပေးပါဗျ။")
-    await state.set_state(OrderStates.waiting_for_link)
-
-@dp.message(OrderStates.waiting_for_link)
-async def process_link(message: types.Message, state: FSMContext):
-    if "tiktok.com" not in message.text:
-        await message.answer("❌ TikTok Link မှားနေပါတယ်ဗျ။")
-        return
-    data = await state.get_data()
-    res = smm_api_call("add", service=data['service_id'], link=message.text, quantity=data['amount'])
-    if "order" in res:
-        if data['type'] == "views": update_user_usage(message.from_user.id, views_add=data['amount'])
-        else: update_user_usage(message.from_user.id, likes_add=data['amount'])
-        await message.answer(f"✅ Order တင်ပြီးပါပြီ! ID: `{res['order']}`", parse_mode="Markdown")
-    else:
-        await message.answer(f"❌ API Error: {res.get('error')}")
-    await state.clear()
-
-@dp.message(F.text == "👤 My Profile")
-async def profile(message: types.Message):
-    v, l = get_user_data(message.from_user.id)
-    await message.answer(f"📊 *သင့်အသုံးပြုမှု*\nViews: {v}/{DAILY_VIEWS_LIMIT}\nLikes: {l}/{DAILY_LIKES_LIMIT}", parse_mode="Markdown")
+@dp.message(BotStates.waiting_for_captcha)
+async def solve_captcha(message: types.Message, state: FSMContext):
+    global driver
+    captcha_text = message.text
+    
+    try:
+        # Zefoy ၏ Captcha Input Box ကို ရှာပြီး စာရိုက်ထည့်ခြင်း
+        # Zefoy structure အရ ပထမဆုံးတွေ့တဲ့ input သည် captcha input ဖြစ်တတ်ပါသည်
+        input_box = driver.find_element(By.TAG_NAME, "input")
+        input_box.clear()
+        input_box.send_keys(captcha_text)
+        
+        # Submit Button ကို နှိပ်ခြင်း (Zefoy တွင် Enter ခေါက်ရပါသည်)
+        from selenium.webdriver.common.keys import Keys
+        input_box.send_keys(Keys.ENTER)
+        
+        await asyncio.sleep(3)
+        
+        # အောင်မြင်မှု ရှိမရှိ စစ်ဆေးရန် SS တစ်ချက် ထပ်ရိုက်ပြခြင်း
+        driver.save_screenshot(SCREENSHOT_PATH)
+        photo = types.FSInputFile(SCREENSHOT_PATH)
+        await bot.send_photo(message.chat.id, photo, caption=f"✅ '{captcha_text}' ကို ထည့်ပြီးပါပြီ။ Result ကို ကြည့်ပါဗျ။")
+        
+        await state.clear()
+    except Exception as e:
+        await message.answer(f"❌ အမှားတက်သွားပါတယ်: {str(e)}")
 
 async def main():
-    init_db()
+    init_db_dummy = True # Database မလိုသေးသဖြင့် dummy ထည့်ထားသည်
     await asyncio.gather(start_web_server(), dp.start_polling(bot))
 
 if __name__ == "__main__":

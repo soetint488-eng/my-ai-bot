@@ -1,26 +1,28 @@
 import os
 import asyncio
 import logging
-import openai
+import google.generativeai as genai
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiohttp import web
 
 # --- CONFIG ---
-# Telegram Bot Token ကိုတော့ ဒီမှာပဲ ထည့်ထားလို့ ရပါတယ်
+# သင့်ရဲ့ Telegram Bot Token
 API_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
+# သင့်ရဲ့ Gemini API Key (OpenAI မဟုတ်ပါ)
+GEMINI_API_KEY = "AIzaSyBCxCKjKQhxg0rpXO5471LvS54XCI1QGdw"
 
-# OpenAI Key ကို Render ရဲ့ Environment Variables ထဲကနေ လှမ်းယူမယ်
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
+# Gemini AI Setup
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 logging.basicConfig(level=logging.INFO)
 
-# --- RENDER PORT KEEP-ALIVE ---
+# --- RENDER WEB SERVER ---
 async def handle(request): 
-    return web.Response(text="ChatGPT Bot is Online and Secure!")
+    return web.Response(text="Gemini Bot is Live!")
 
 async def start_web_server():
     app = web.Application()
@@ -34,52 +36,26 @@ async def start_web_server():
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    welcome = (
-        f"🤖 **ᴄʜᴀᴛɢᴘᴛ ᴀɪ ᴀssɪsᴛᴀɴᴛ**\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"မင်္ဂလာပါ **{message.from_user.first_name}**! 👋\n\n"
-        f"ကျွန်တော်က OpenAI ရဲ့ ChatGPT ဖြစ်ပါတယ်။ သိလိုသမျှကို "
-        f"စာရိုက်ပြီး မေးမြန်းနိုင်ပါတယ်ဗျ။"
-    )
-    await message.answer(welcome, parse_mode="Markdown")
+    await message.answer("🤖 **ɢᴇᴍɪɴɪ ᴀɪ ᴀssɪsᴛᴀɴᴛ**\nမင်္ဂလာပါဗျ! ကျွန်တော်က Gemini AI ဖြစ်ပါတယ်။ သိလိုသမျှ မေးမြန်းနိုင်ပါပြီ။")
 
 @dp.message(F.text)
 async def ai_chat(message: types.Message):
-    # API Key ရှိမရှိ အရင်စစ်မယ်
-    if not OPENAI_API_KEY:
-        await message.reply("❌ Error: OpenAI API Key ကို Render မှာ မထည့်ရသေးပါဘူးဗျ။")
-        return
-
     await bot.send_chat_action(message.chat.id, "typing")
-    
     try:
-        # OpenAI v0.28.1 ရဲ့ Asynchronous ခေါ်ဆိုမှု
-        response = await asyncio.to_thread(
-            openai.ChatCompletion.create,
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant. Answer in Myanmar language."},
-                {"role": "user", "content": message.text}
-            ]
-        )
+        # AI ဆီက အဖြေတောင်းခြင်း
+        response = await asyncio.to_thread(model.generate_content, message.text)
         
-        ai_reply = response.choices[0].message.content
-        await message.reply(ai_reply)
+        if response.text:
+            await message.reply(response.text)
+        else:
+            await message.reply("⚠️ အဖြေမထုတ်ပေးနိုင်ပါဘူးဗျ။")
             
     except Exception as e:
-        logging.error(f"OpenAI Error: {e}")
-        error_msg = str(e)
-        
-        if "insufficient_quota" in error_msg:
-            await message.reply("❌ **Error:** သင့် OpenAI အကောင့်မှာ Credit ကုန်နေပါပြီဗျ။")
-        else:
-            await message.reply(f"❌ **Error:**\n`{error_msg[:100]}`")
+        logging.error(f"Gemini Error: {e}")
+        await message.reply("❌ AI Server မှာ အခက်အခဲရှိနေပါတယ်ဗျ။")
 
 async def main():
-    await asyncio.gather(
-        start_web_server(),
-        dp.start_polling(bot)
-    )
+    await asyncio.gather(start_web_server(), dp.start_polling(bot))
 
 if __name__ == "__main__":
     asyncio.run(main())

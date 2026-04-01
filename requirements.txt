@@ -1,4 +1,2 @@
-aiogram
-requests
-aiohttp
-python-dotenv
+pyTelegramBotAPI
+google-generativeai

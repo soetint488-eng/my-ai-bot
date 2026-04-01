@@ -1,51 +1,74 @@
 import os
-import telebot
+import asyncio
+import logging
 import google.generativeai as genai
-from flask import Flask
-from threading import Thread
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import Command
+from aiohttp import web
 
-# --- Configuration ---
-API_KEY = os.environ.get('AIzaSyBCxCKjKQhxg0rpXO5471LvS54XCI1QGdw')
-BOT_TOKEN = os.environ.get('8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI')
+# --- CONFIG ---
+API_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
+GEMINI_API_KEY = "AIzaSyBCxCKjKQhxg0rpXO5471LvS54XCI1QGdw"
 
 # Gemini AI Setup
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash') # ပိုမြန်တဲ့ Flash model ကို သုံးထားပါတယ်
 
-# Telegram Bot Setup
-bot = telebot.TeleBot(BOT_TOKEN)
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher()
+logging.basicConfig(level=logging.INFO)
 
-# --- Web Server for Render ---
-app = Flask('')
+# --- RENDER PORT KEEP-ALIVE ---
+async def handle(request): 
+    return web.Response(text="Gemini AI Bot is Running!")
 
-@app.route('/')
-def home():
-    return "Bot is running!"
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
 
-def run_web():
-    app.run(host='0.0.0.0', port=8080)
+# --- HANDLERS ---
 
-def keep_alive():
-    t = Thread(target=run_web)
-    t.start()
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    welcome = (
+        f"🤖 **ɢᴇᴍɪɴɪ ᴀɪ ᴀssɪsᴛᴀɴᴛ**\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"မင်္ဂလာပါ **{message.from_user.first_name}**! 👋\n\n"
+        f"ကျွန်တော်က Gemini AI ဖြစ်ပါတယ်။ သိလိုသမျှ မေးခွန်းတွေကို "
+        f"စာရိုက်ပြီး မေးမြန်းနိုင်ပါတယ်ဗျ။"
+    )
+    await message.answer(welcome, parse_mode="Markdown")
 
-# --- Bot Commands ---
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    bot.reply_to(message, "မင်္ဂလာပါ! ကျွန်တော်က Gemini AI Bot ဖြစ်ပါတယ်။ တစ်ခုခု သိချင်တာရှိရင် မေးမြန်းနိုင်ပါတယ်။")
-
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
+@dp.message(F.text)
+async def ai_chat(message: types.Message):
+    # User စာရိုက်လိုက်ရင် Bot က 'typing...' ပြပေးမယ်
+    await bot.send_chat_action(message.chat.id, "typing")
+    
     try:
-        # AI ဆီက အဖြေတောင်းခြင်း
+        # Gemini AI ဆီက အဖြေတောင်းခြင်း
         response = model.generate_content(message.text)
-        bot.reply_to(message, response.text)
+        
+        # အဖြေကို ပြန်ပို့ခြင်း
+        if response.text:
+            await message.reply(response.text, parse_mode="Markdown")
+        else:
+            await message.reply("⚠️ စိတ်မရှိပါနဲ့ဗျ၊ ဒီမေးခွန်းကို ကျွန်တော် မဖြေနိုင်သေးပါဘူး။")
+            
     except Exception as e:
-        bot.reply_to(message, "စိတ်မရှိပါနဲ့၊ အမှားတစ်ခု ဖြစ်သွားလို့ပါ။ ခဏနေမှ ပြန်ကြိုးစားကြည့်ပေးပါ။")
-        print(f"Error: {e}")
+        logging.error(f"Gemini Error: {e}")
+        await message.reply("❌ AI Server နဲ့ ချိတ်ဆက်ရာမှာ အခက်အခဲရှိနေပါတယ်ဗျ။ ခဏနေမှ ပြန်စမ်းကြည့်ပေးပါ။")
 
-# --- Start Bot ---
+async def main():
+    # Web server နဲ့ Bot ကို တစ်ပြိုင်တည်း run မယ်
+    await asyncio.gather(
+        start_web_server(),
+        dp.start_polling(bot)
+    )
+
 if __name__ == "__main__":
-    print("Bot is starting...")
-    keep_alive()  # Render မှာ လိုအပ်တဲ့ Web Server ကို စတင်ခြင်း
-    bot.infinity_polling()
+    asyncio.run(main())

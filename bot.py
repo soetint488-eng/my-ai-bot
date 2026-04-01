@@ -1,18 +1,19 @@
 import os
 import asyncio
 import logging
-import google.generativeai as genai
+from openai import AsyncOpenAI
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiohttp import web
 
 # --- CONFIG ---
+# သင့်ရဲ့ Telegram Bot Token
 API_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
-GEMINI_API_KEY = "AIzaSyBCxCKjKQhxg0rpXO5471LvS54XCI1QGdw"
+# သင့်ရဲ့ OpenAI API Key
+OPENAI_API_KEY = "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"
 
-# Gemini AI Setup
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash') # ပိုမြန်တဲ့ Flash model ကို သုံးထားပါတယ်
+# OpenAI Client Setup
+client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
@@ -20,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 
 # --- RENDER PORT KEEP-ALIVE ---
 async def handle(request): 
-    return web.Response(text="Gemini AI Bot is Running!")
+    return web.Response(text="OpenAI Bot is Online!")
 
 async def start_web_server():
     app = web.Application()
@@ -36,35 +37,47 @@ async def start_web_server():
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     welcome = (
-        f"🤖 **ɢᴇᴍɪɴɪ ᴀɪ ᴀssɪsᴛᴀɴᴛ**\n"
+        f"🤖 **ᴄʜᴀᴛɢᴘᴛ ᴀɪ ᴀssɪsᴛᴀɴᴛ**\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"မင်္ဂလာပါ **{message.from_user.first_name}**! 👋\n\n"
-        f"ကျွန်တော်က Gemini AI ဖြစ်ပါတယ်။ သိလိုသမျှ မေးခွန်းတွေကို "
+        f"ကျွန်တော်က OpenAI ရဲ့ ChatGPT ဖြစ်ပါတယ်။ သိလိုသမျှကို "
         f"စာရိုက်ပြီး မေးမြန်းနိုင်ပါတယ်ဗျ။"
     )
     await message.answer(welcome, parse_mode="Markdown")
 
 @dp.message(F.text)
 async def ai_chat(message: types.Message):
-    # User စာရိုက်လိုက်ရင် Bot က 'typing...' ပြပေးမယ်
+    # Typing status ပြပေးမယ်
     await bot.send_chat_action(message.chat.id, "typing")
     
     try:
-        # Gemini AI ဆီက အဖြေတောင်းခြင်း
-        response = model.generate_content(message.text)
+        # OpenAI ဆီက အဖြေတောင်းခြင်း
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini", # စျေးသက်သာပြီး အဖြေမြန်တဲ့ model
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant. Answer in Myanmar language if possible."},
+                {"role": "user", "content": message.text}
+            ],
+            max_tokens=1000
+        )
         
         # အဖြေကို ပြန်ပို့ခြင်း
-        if response.text:
-            await message.reply(response.text, parse_mode="Markdown")
-        else:
-            await message.reply("⚠️ စိတ်မရှိပါနဲ့ဗျ၊ ဒီမေးခွန်းကို ကျွန်တော် မဖြေနိုင်သေးပါဘူး။")
+        ai_reply = response.choices[0].message.content
+        await message.reply(ai_reply, parse_mode="Markdown")
             
     except Exception as e:
-        logging.error(f"Gemini Error: {e}")
-        await message.reply("❌ AI Server နဲ့ ချိတ်ဆက်ရာမှာ အခက်အခဲရှိနေပါတယ်ဗျ။ ခဏနေမှ ပြန်စမ်းကြည့်ပေးပါ။")
+        logging.error(f"OpenAI Error: {e}")
+        error_msg = str(e)
+        
+        # Error အလိုက် အသိပေးခြင်း
+        if "insufficient_quota" in error_msg:
+            await message.reply("❌ **Error:** သင့် OpenAI Key မှာ Credit မရှိတော့ပါဘူးဗျ။")
+        elif "invalid_api_key" in error_msg:
+            await message.reply("❌ **Error:** API Key မှားယွင်းနေပါတယ်ဗျ။")
+        else:
+            await message.reply(f"❌ **Error:**\n`{error_msg[:100]}`")
 
 async def main():
-    # Web server နဲ့ Bot ကို တစ်ပြိုင်တည်း run မယ်
     await asyncio.gather(
         start_web_server(),
         dp.start_polling(bot)

@@ -1,3 +1,4 @@
-pyTelegramBotAPI
+aiogram
 google-generativeai
-flask
+aiohttp
+python-dotenv

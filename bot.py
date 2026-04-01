@@ -1,20 +1,16 @@
 import os
 import asyncio
 import logging
-import google.generativeai as genai
+from groq import Groq
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiohttp import web
 
 # --- CONFIG ---
-# သင့်ရဲ့ Telegram Bot Token
 API_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
-# သင့်ရဲ့ Gemini API Key (OpenAI မဟုတ်ပါ)
-GEMINI_API_KEY = "AIzaSyBCxCKjKQhxg0rpXO5471LvS54XCI1QGdw"
+GROQ_API_KEY = "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"
 
-# Gemini AI Setup
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+client = Groq(api_key=GROQ_API_KEY)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
@@ -22,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 
 # --- RENDER WEB SERVER ---
 async def handle(request): 
-    return web.Response(text="Gemini Bot is Live!")
+    return web.Response(text="Llama 3 AI is Running on Groq!")
 
 async def start_web_server():
     app = web.Application()
@@ -36,23 +32,35 @@ async def start_web_server():
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await message.answer("🤖 **ɢᴇᴍɪɴɪ ᴀɪ ᴀssɪsᴛᴀɴᴛ**\nမင်္ဂလာပါဗျ! ကျွန်တော်က Gemini AI ဖြစ်ပါတယ်။ သိလိုသမျှ မေးမြန်းနိုင်ပါပြီ။")
+    welcome = (
+        f"🤖 **ʟʟᴀᴍᴀ 3 ᴀɪ (ɢʀᴏǫ)**\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"မင်္ဂလာပါ **{message.from_user.first_name}**! 👋\n\n"
+        f"ကျွန်တော်က Llama 3 AI ဖြစ်ပါတယ်။ သိလိုသမျှကို "
+        f"မြန်မာလို မေးမြန်းနိုင်ပါပြီဗျ။"
+    )
+    await message.answer(welcome, parse_mode="Markdown")
 
 @dp.message(F.text)
 async def ai_chat(message: types.Message):
     await bot.send_chat_action(message.chat.id, "typing")
     try:
-        # AI ဆီက အဖြေတောင်းခြင်း
-        response = await asyncio.to_thread(model.generate_content, message.text)
+        # Groq (Llama 3) ဆီက အဖြေတောင်းခြင်း
+        chat_completion = await asyncio.to_thread(
+            client.chat.completions.create,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant. You must answer in Myanmar language. Be friendly and polite."},
+                {"role": "user", "content": message.text}
+            ],
+            model="llama3-70b-8192", # အတော်ဆုံး model ပါ
+        )
         
-        if response.text:
-            await message.reply(response.text)
-        else:
-            await message.reply("⚠️ အဖြေမထုတ်ပေးနိုင်ပါဘူးဗျ။")
+        reply = chat_completion.choices[0].message.content
+        await message.reply(reply)
             
     except Exception as e:
-        logging.error(f"Gemini Error: {e}")
-        await message.reply("❌ AI Server မှာ အခက်အခဲရှိနေပါတယ်ဗျ။")
+        logging.error(f"Groq Error: {e}")
+        await message.reply("❌ AI Server မှာ ခေတ္တ အခက်အခဲရှိနေပါတယ်ဗျ။")
 
 async def main():
     await asyncio.gather(start_web_server(), dp.start_polling(bot))

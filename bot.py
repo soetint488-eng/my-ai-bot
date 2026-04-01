@@ -15,7 +15,7 @@ dp = Dispatcher()
 logging.basicConfig(level=logging.INFO)
 
 # --- RENDER PORT KEEP-ALIVE ---
-async def handle(request): return web.Response(text="TikTok HD Bot is Online!")
+async def handle(request): return web.Response(text="TikTok Premium Bot is Online!")
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/', handle)
@@ -28,65 +28,101 @@ async def start_web_server():
 def get_tiktok_data(url):
     api_url = f"https://www.tikwm.com/api/?url={url}"
     try:
-        res = requests.get(api_url).json()
+        res = requests.post(api_url).json()
         if res.get("code") == 0: return res["data"]
     except: return None
     return None
 
-# --- QUALITY SELECTION UI ---
-def quality_menu(v_id):
+# --- PREMIUM BUTTONS ---
+def premium_menu(v_id):
     builder = InlineKeyboardBuilder()
-    builder.row(types.InlineKeyboardButton(text="🎬 1080p (Full HD)", callback_data=f"q_1080_{v_id}"))
-    builder.row(types.InlineKeyboardButton(text="🎞️ 480p (Standard)", callback_data=f"q_480_{v_id}"))
-    builder.row(types.InlineKeyboardButton(text="🎵 Download MP3", callback_data=f"q_audio_{v_id}"))
+    builder.row(
+        types.InlineKeyboardButton(text="🎬 1080ᴘ ᴜʟᴛʀᴀ ʜᴅ", callback_data=f"q_1080_{v_id}"),
+        types.InlineKeyboardButton(text="🎞️ 480ᴘ sᴛᴀɴᴅᴀʀᴅ", callback_data=f"q_480_{v_id}")
+    )
+    builder.row(types.InlineKeyboardButton(text="🎵 ᴅᴏᴡɴʟᴏᴀᴅ ᴍᴘ3 ᴀᴜᴅɪᴏ", callback_data=f"q_audio_{v_id}"))
+    builder.row(types.InlineKeyboardButton(text="✨ sᴇᴀʀᴄʜ ᴀɢᴀɪɴ", callback_data="reset_search"))
     return builder.as_markup()
 
 # --- HANDLERS ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await message.answer("🚀 **TikTok HD Downloader**\n\nLink ပို့ပေးပါ၊ Quality ရွေးချယ်နိုင်ပါတယ်ဗျ။", parse_mode="Markdown")
+    welcome = (
+        f"🌟 **ᴛɪᴋᴛᴏᴋ ᴘʀᴇᴍɪᴜᴍ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ** 🌟\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"ʜᴇʟʟᴏ **{message.from_user.first_name}**! ✨\n\n"
+        f"💎 **ᴇxᴄʟᴜsɪᴠᴇ ғᴇᴀᴛᴜʀᴇs:**\n"
+        f"╰┈➤ ɴᴏ ᴡᴀᴛᴇʀᴍᴀʀᴋ (ʜᴅ)\n"
+        f"╰┈➤ ғᴀsᴛ ᴀᴘɪ ʀᴇsᴘᴏɴsᴇ\n"
+        f"╰┈➤ ᴜsᴇʀ ᴘʀᴏғɪʟᴇ ᴀɴᴀʟʏᴛɪᴄs\n\n"
+        f"🔗 **ᴘᴀsᴛᴇ ʏᴏᴜʀ ʟɪɴᴋ ʙᴇʟᴏᴡ:**"
+    )
+    await message.answer(welcome, parse_mode="Markdown")
 
 @dp.message(F.text.contains("tiktok.com"))
-async def process_link(message: types.Message):
-    wait_msg = await message.answer("🔍 **Searching for high quality...**")
+async def process_all_info(message: types.Message):
+    wait_msg = await message.answer("💎 **ᴀɴᴀʟʏᴢɪɴɢ ʟɪɴᴋ... ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ**")
+    
     data = get_tiktok_data(message.text)
     
     if data:
         v_id = data['id']
-        # ယာယီသိမ်းဆည်းခြင်း
-        os.environ[f"vid_{v_id}"] = data['play'] # HD/Original
-        os.environ[f"sd_{v_id}"] = data.get('wmplay', data['play']) # Watermark ပါတဲ့ဟာ သို့မဟုတ် SD Link
+        author = data['author']
+        stats = data['stats']
+        
+        # Privacy & Status Icons
+        is_private = "🔒 ᴘʀɪᴠᴀᴛᴇ" if author.get('private', False) else "🔓 ᴘᴜʙʟɪᴄ"
+        is_verified = "👑 ᴠᴇʀɪғɪᴇᴅ" if author.get('verified', False) else "👤 ʀᴇɢᴜʟᴀʀ"
+        
+        info_text = (
+            f"👤 **ᴀᴜᴛʜᴏʀ ᴘʀᴏғɪʟᴇ**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✨ **ɴᴀᴍᴇ:** {author['nickname']}\n"
+            f"🆔 **ᴜsᴇʀɴᴀᴍᴇ:** @{author['unique_id']}\n"
+            f"🛡️ **sᴛᴀᴛᴜs:** {is_verified}\n"
+            f"🌐 **ᴠɪsɪʙɪʟɪᴛʏ:** {is_private}\n\n"
+            f"📊 **sᴛᴀᴛɪsᴛɪᴄs:**\n"
+            f"╰┈➤ ғᴏʟʟᴏᴡᴇʀs: **{author.get('followerCount', 0)}**\n"
+            f"╰┈➤ ᴛᴏᴛᴀʟ ʟɪᴋᴇs: **{author.get('heartCount', 0)}**\n"
+            f"╰┈➤ ᴠɪᴅᴇᴏ ᴠɪᴇᴡs: **{stats.get('play_count', 0)}**\n\n"
+            f"💎 **sᴇʟᴇᴄᴛ ʏᴏᴜʀ ǫᴜᴀʟɪᴛʏ:**"
+        )
+        
+        os.environ[f"vid_{v_id}"] = data['play']
+        os.environ[f"sd_{v_id}"] = data.get('wmplay', data['play'])
         os.environ[f"aud_{v_id}"] = data['music']
         
-        caption = f"📌 **Video Found!**\n\n👤 Author: {data['author']['nickname']}\nQuality ကို အောက်မှာ ရွေးချယ်ပါ 👇"
-        await bot.send_photo(message.chat.id, photo=data['cover'], caption=caption, reply_markup=quality_menu(v_id))
+        await bot.send_photo(
+            message.chat.id, 
+            photo=author['avatar'], 
+            caption=info_text, 
+            parse_mode="Markdown",
+            reply_markup=premium_menu(v_id)
+        )
         await wait_msg.delete()
     else:
-        await message.answer("❌ ဗီဒီယို ရှာမတွေ့ပါဘူးဗျ။")
+        await message.answer("⚠️ **ᴇʀʀᴏʀ:** ᴜɴᴀʙʟᴇ ᴛᴏ ғᴇᴛᴄʜ ᴅᴀᴛᴀ. ᴛʀʏ ᴀɢᴀɪɴ!")
+
+@dp.callback_query(F.data == "reset_search")
+async def reset(callback: types.CallbackQuery):
+    await callback.message.answer("🔗 **ʀᴇᴀᴅʏ ғᴏʀ ɴᴇxᴛ ʟɪɴᴋ! sᴇɴᴅ ɪᴛ ɴᴏᴡ.**")
+    await callback.answer()
 
 @dp.callback_query(F.data.startswith("q_"))
-async def download_quality(callback: types.CallbackQuery):
+async def download_logic(callback: types.CallbackQuery):
     _, quality, v_id = callback.data.split("_")
-    await callback.answer(f"⏳ {quality} ကို ပြင်ဆင်နေပါတယ်...")
+    await callback.answer(f"🚀 ᴘʀᴏᴄᴇssɪɴɢ {quality}...")
 
-    if quality == "1080":
-        url = os.environ.get(f"vid_{v_id}")
-        label = "✅ 1080p Full HD"
-    elif quality == "480":
-        url = os.environ.get(f"sd_{v_id}")
-        label = "✅ 480p Standard"
-    else: # Audio
-        url = os.environ.get(f"aud_{v_id}")
-        label = "🎶 High Quality MP3"
+    url = os.environ.get(f"vid_{v_id}") if quality == "1080" else os.environ.get(f"sd_{v_id}")
+    if quality == "audio": url = os.environ.get(f"aud_{v_id}")
 
     if url:
-        await bot.send_chat_action(callback.message.chat.id, "upload_video" if quality != "audio" else "upload_document")
         if quality == "audio":
-            await bot.send_audio(callback.message.chat.id, types.URLInputFile(url), caption=label)
+            await bot.send_audio(callback.message.chat.id, types.URLInputFile(url), caption="🎶 **ʜǫ ᴀᴜᴅɪᴏ sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴛʀᴀᴄᴛᴇᴅ!**")
         else:
-            await bot.send_video(callback.message.chat.id, types.URLInputFile(url), caption=label)
+            await bot.send_video(callback.message.chat.id, types.URLInputFile(url), caption=f"✅ **{quality}ᴘ ᴠɪᴅᴇᴏ ᴅᴇʟɪᴠᴇʀᴇᴅ!**")
     else:
-        await callback.message.answer("❌ Link Expired. Please resend the link.")
+        await callback.message.answer("❌ **ᴇʀʀᴏʀ:** ʟɪɴᴋ ᴇxᴘɪʀᴇᴅ.")
 
 async def main():
     await asyncio.gather(start_web_server(), dp.start_polling(bot))

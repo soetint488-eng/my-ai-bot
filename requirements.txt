@@ -1,5 +1,4 @@
 aiogram
-selenium
-webdriver-manager
+requests
 aiohttp
 python-dotenv

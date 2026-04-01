@@ -14,15 +14,21 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 logging.basicConfig(level=logging.INFO)
 
-async def handle(request): return web.Response(text="Llama 3.3 is Online!")
+# --- RENDER PORT ALIVE ---
+async def handle(request):
+    return web.Response(text="Bot is running smoothly!")
+
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/', handle)
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.environ.get("PORT", 8080))
-    await web.TCPSite(runner, '0.0.0.0', port).start()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    logging.info(f"Web server started on port {port}")
 
+# --- AI RESPONSE FUNCTION ---
 async def get_groq_response(user_text):
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
@@ -30,25 +36,24 @@ async def get_groq_response(user_text):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "llama-3.3-70b-specdec", # အသစ်ဆုံးနဲ့ အမြန်ဆုံး Model ပါ
+        "model": "llama-3.3-70b-versatile",
         "messages": [
-            {"role": "system", "content": "You are a helpful assistant. Answer in Myanmar language. Be very polite."},
+            {"role": "system", "content": "You are a helpful assistant. Answer in Myanmar language."},
             {"role": "user", "content": user_text}
         ]
     }
     
     async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload, headers=headers) as resp:
-            if resp.status != 200:
-                err_data = await resp.json()
-                return f"❌ API Error: {err_data['error']['message']}"
-            
+        async with session.post(url, json=payload, headers=headers, timeout=20) as resp:
             data = await resp.json()
+            if resp.status != 200:
+                return f"❌ API Error: {data['error']['message']}"
             return data['choices'][0]['message']['content']
 
+# --- HANDLERS ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await message.answer("🤖 **ʟʟᴀᴍᴀ 3.3 ᴀɪ** ✨\nမင်္ဂလာပါ! အခု Model အသစ်နဲ့ အဆင်သင့်ဖြစ်ပါပြီဗျ။ သိလိုသမျှ မေးမြန်းနိုင်ပါပြီ။")
+    await message.answer("🤖 **ʟʟᴀᴍᴀ 3.3 ᴀɪ** ✨\nအားလုံးအဆင်သင့်ဖြစ်ပါပြီ! မေးခွန်းတွေ မေးနိုင်ပါပြီဗျ။")
 
 @dp.message(F.text)
 async def ai_chat(message: types.Message):
@@ -57,10 +62,17 @@ async def ai_chat(message: types.Message):
         reply = await get_groq_response(message.text)
         await message.reply(reply)
     except Exception as e:
-        await message.reply("❌ တစ်ခုခု မှားယွင်းနေပါတယ်ဗျ။")
+        logging.error(f"Chat Error: {e}")
+        await message.reply("❌ ခဏနေမှ ပြန်မေးပေးပါဗျ။")
 
 async def main():
-    await asyncio.gather(start_web_server(), dp.start_polling(bot))
+    # Web server နဲ့ Polling ကို ယှဉ် run ပါမယ်
+    server_task = asyncio.create_task(start_web_server())
+    poll_task = asyncio.create_task(dp.start_polling(bot))
+    await asyncio.gather(server_task, poll_task)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("Bot Stopped")

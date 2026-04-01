@@ -1,7 +1,7 @@
 import os
 import asyncio
 import logging
-import requests
+import aiohttp
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -24,13 +24,17 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 8080))
     await web.TCPSite(runner, '0.0.0.0', port).start()
 
-# --- TIKTOK API LOGIC ---
-def get_tiktok_data(url):
+# --- FAST ASYNC API LOGIC ---
+async def get_tiktok_data(url):
     api_url = f"https://www.tikwm.com/api/?url={url}"
-    try:
-        res = requests.post(api_url).json()
-        if res.get("code") == 0: return res["data"]
-    except: return None
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(api_url, timeout=15) as response:
+                res = await response.json()
+                if res.get("code") == 0: return res["data"]
+        except Exception as e:
+            logging.error(f"API Error: {e}")
+            return None
     return None
 
 # --- PREMIUM BUTTONS ---
@@ -50,11 +54,10 @@ async def cmd_start(message: types.Message):
     welcome = (
         f"🌟 **ᴛɪᴋᴛᴏᴋ ᴘʀᴇᴍɪᴜᴍ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ** 🌟\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"ʜᴇʟʟᴏ **{message.from_user.first_name}**! ✨\n\n"
+        f"ʜᴇʟʟᴏ **{message.from_user.first_name}**! 👋\n\n"
         f"💎 **ᴇxᴄʟᴜsɪᴠᴇ ғᴇᴀᴛᴜʀᴇs:**\n"
         f"╰┈➤ ɴᴏ ᴡᴀᴛᴇʀᴍᴀʀᴋ (ʜᴅ)\n"
-        f"╰┈➤ ғᴀsᴛ ᴀᴘɪ ʀᴇsᴘᴏɴsᴇ\n"
-        f"╰┈➤ ᴜsᴇʀ ᴘʀᴏғɪʟᴇ ᴀɴᴀʟʏᴛɪᴄs\n\n"
+        f"╰┈➤ ғᴀsᴛ ᴀᴘɪ ʀᴇsᴘᴏɴsᴇ\n\n"
         f"🔗 **ᴘᴀsᴛᴇ ʏᴏᴜʀ ʟɪɴᴋ ʙᴇʟᴏᴡ:**"
     )
     await message.answer(welcome, parse_mode="Markdown")
@@ -63,7 +66,7 @@ async def cmd_start(message: types.Message):
 async def process_all_info(message: types.Message):
     wait_msg = await message.answer("💎 **ᴀɴᴀʟʏᴢɪɴɢ ʟɪɴᴋ... ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ**")
     
-    data = get_tiktok_data(message.text)
+    data = await get_tiktok_data(message.text)
     
     if data:
         v_id = data['id']
@@ -78,20 +81,19 @@ async def process_all_info(message: types.Message):
             f"👤 **ᴀᴜᴛʜᴏʀ ᴘʀᴏғɪʟᴇ**\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"✨ **ɴᴀᴍᴇ:** {author['nickname']}\n"
-            f"🆔 **ᴜsᴇʀɴᴀᴍᴇ:** @{author['unique_id']}\n"
             f"🛡️ **sᴛᴀᴛᴜs:** {is_verified}\n"
-            f"🌐 **ᴠɪsɪʙɪʟɪᴛʏ:** {is_private}\n\n"
             f"📊 **sᴛᴀᴛɪsᴛɪᴄs:**\n"
             f"╰┈➤ ғᴏʟʟᴏᴡᴇʀs: **{author.get('followerCount', 0)}**\n"
-            f"╰┈➤ ᴛᴏᴛᴀʟ ʟɪᴋᴇs: **{author.get('heartCount', 0)}**\n"
             f"╰┈➤ ᴠɪᴅᴇᴏ ᴠɪᴇᴡs: **{stats.get('play_count', 0)}**\n\n"
             f"💎 **sᴇʟᴇᴄᴛ ʏᴏᴜʀ ǫᴜᴀʟɪᴛʏ:**"
         )
         
+        # Link များကို Environment ထဲတွင် ယာယီသိမ်းခြင်း
         os.environ[f"vid_{v_id}"] = data['play']
         os.environ[f"sd_{v_id}"] = data.get('wmplay', data['play'])
         os.environ[f"aud_{v_id}"] = data['music']
         
+        # Photo ပို့ပြီး UI ပြခြင်း
         await bot.send_photo(
             message.chat.id, 
             photo=author['avatar'], 
@@ -101,28 +103,32 @@ async def process_all_info(message: types.Message):
         )
         await wait_msg.delete()
     else:
-        await message.answer("⚠️ **ᴇʀʀᴏʀ:** ᴜɴᴀʙʟᴇ ᴛᴏ ғᴇᴛᴄʜ ᴅᴀᴛᴀ. ᴛʀʏ ᴀɢᴀɪɴ!")
-
-@dp.callback_query(F.data == "reset_search")
-async def reset(callback: types.CallbackQuery):
-    await callback.message.answer("🔗 **ʀᴇᴀᴅʏ ғᴏʀ ɴᴇxᴛ ʟɪɴᴋ! sᴇɴᴅ ɪᴛ ɴᴏᴡ.**")
-    await callback.answer()
+        await bot.edit_message_text("⚠️ **ᴇʀʀᴏʀ:** ᴜɴᴀʙʟᴇ ᴛᴏ ғᴇᴛᴄʜ ᴅᴀᴛᴀ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ!", 
+                                    chat_id=message.chat.id, message_id=wait_msg.message_id)
 
 @dp.callback_query(F.data.startswith("q_"))
 async def download_logic(callback: types.CallbackQuery):
     _, quality, v_id = callback.data.split("_")
-    await callback.answer(f"🚀 ᴘʀᴏᴄᴇssɪɴɢ {quality}...")
+    await callback.answer(f"🚀 ᴜᴘʟᴏᴀᴅɪɴɢ {quality}...")
 
     url = os.environ.get(f"vid_{v_id}") if quality == "1080" else os.environ.get(f"sd_{v_id}")
     if quality == "audio": url = os.environ.get(f"aud_{v_id}")
 
     if url:
+        # Bot ကိုယ်တိုင် Upload တင်ပေးခြင်း
         if quality == "audio":
+            await bot.send_chat_action(callback.message.chat.id, "upload_document")
             await bot.send_audio(callback.message.chat.id, types.URLInputFile(url), caption="🎶 **ʜǫ ᴀᴜᴅɪᴏ sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴛʀᴀᴄᴛᴇᴅ!**")
         else:
-            await bot.send_video(callback.message.chat.id, types.URLInputFile(url), caption=f"✅ **{quality}ᴘ ᴠɪᴅᴇᴏ ᴅᴇʟɪᴠᴇʀᴇᴅ!**")
+            await bot.send_chat_action(callback.message.chat.id, "upload_video")
+            await bot.send_video(callback.message.chat.id, types.URLInputFile(url), caption=f"✅ **{quality}ᴘ ᴠɪᴅေᴏ ᴅᴇʟɪᴠᴇʀᴇᴅ!**")
     else:
-        await callback.message.answer("❌ **ᴇʀʀᴏʀ:** ʟɪɴᴋ ᴇxᴘɪʀᴇᴅ.")
+        await callback.message.answer("❌ **ᴇʀʀᴏʀ:** ʟɪɴᴋ ᴇxᴘɪʀᴇᴅ. ᴘʟᴇᴀsᴇ sᴇɴᴅ ʟɪɴᴋ ᴀɢᴀɪɴ.")
+
+@dp.callback_query(F.data == "reset_search")
+async def reset(callback: types.CallbackQuery):
+    await callback.message.answer("🔗 **ʀᴇᴀᴅʏ ғᴏʀ ɴᴇxᴛ ʟɪɴᴋ! sᴇɴဒ ɪᴛ ɴᴏᴡ.**")
+    await callback.answer()
 
 async def main():
     await asyncio.gather(start_web_server(), dp.start_polling(bot))

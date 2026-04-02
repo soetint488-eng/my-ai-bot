@@ -1,106 +1,95 @@
 import os
-import time
 import asyncio
+import logging
+import aiohttp
+import re
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
+from aiohttp import web
 
 # --- CONFIG ---
-# Render ရဲ့ Environment Variables ထဲမှာ BOT_TOKEN ထည့်ဖို့ မမေ့ပါနဲ့
-TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
-bot = Bot(token=TOKEN)
+API_TOKEN = "8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI"
+GROQ_API_KEY = "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"
+BOT_NAME = "သားသား"
+
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
+logging.basicConfig(level=logging.INFO)
 
-# Browser Setting (Render ပေါ်မှာ Run ရန် အရေးကြီးဆုံးအပိုင်း)
-def get_driver():
-    chrome_options = Options()
-    chrome_options.add_argument('--headless') # မျက်နှာပြင်မပါဘဲ Run မည်
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--disable-gpu')
-    chrome_options.binary_location = "/usr/bin/chromium-browser" # Render အတွက် Path
-    
-    driver = webdriver.Chrome(options=chrome_options)
-    return driver
+# --- RENDER PORT ALIVE ---
+async def handle(request):
+    return web.Response(text="သားသား Bot is running smoothly!")
 
-# State သတ်မှတ်ခြင်း
-class ZefoyState(StatesGroup):
-    waiting_for_captcha = State()
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
 
-# Browser ကို Global အနေနဲ့ တစ်ခါတည်း ဖွင့်ထားမယ်
-driver = get_driver()
+# --- AI RESPONSE FUNCTION ---
+async def get_groq_response(user_text):
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "system", "content": f"မင်းနာမည်က {BOT_NAME} ဖြစ်ပါတယ်။ မင်းက အဖော်မွန်ကောင်းဖြစ်ပြီး ယဉ်ကျေးပျူငှာစွာ မြန်မာလို ပြန်ဖြေပေးရပါမယ်။"},
+            {"role": "user", "content": user_text}
+        ]
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=payload, headers=headers, timeout=20) as resp:
+            data = await resp.json()
+            return data['choices'][0]['message']['content']
 
-# --- HANDLERS ---
+# --- AUTOMATION HANDLERS ---
 
+# ၁။ ဆဲစာစစ်ခြင်း (Bad Words Filter)
+BAD_WORDS = ["လီး", "စပ", "စောက်ပ", "တပတ်", "ဖာ"] # မောင်ထည့်ချင်တာ ထပ်ဖြည့်လို့ရတယ်
+
+@dp.message(F.text)
+async def main_handler(message: types.Message):
+    text = message.text.lower()
+
+    # (က) ဆဲစာစစ်မယ်
+    if any(word in text for word in BAD_WORDS):
+        try:
+            await message.reply("သပ့နဲ့ တတ်ပွတ်လိုက်မယ်။ စကားကို ဆင်ခြင်ပြောပါဆို‌ နေမှပဲ🖕🏻🖕🏻။")
+        except: pass
+        return
+
+    # (ခ) Link ဖျက်မယ် (Group ဖြစ်မှ)
+    if message.chat.type in ["group", "supergroup"]:
+        if re.search(r"http[s]?://", text) or ".com" in text:
+            try:
+                await message.delete()
+                # await message.answer(f"@{message.from_user.username} လင့်ခ်ချလို့မရပါဘူးရှင့်။")
+            except: pass
+            return
+
+    # (ဂ) AI Chat (သားသား လို့ပါမှ ဖြေမယ်)
+    if BOT_NAME in text or message.chat.type == "private":
+        await bot.send_chat_action(message.chat.id, "typing")
+        try:
+            # "သားသား" ဆိုတဲ့ စာလုံးကို ဖယ်ပြီးမှ AI ဆီ ပို့မယ်
+            clean_text = text.replace(BOT_NAME, "").strip()
+            reply = await get_groq_response(clean_text if clean_text else "နေကောင်းလား")
+            await message.reply(reply)
+        except Exception as e:
+            await message.reply("❌ သားသား ခဏနားနေလို့ နောက်မှ ပြန်မေးပေးပါ ရှင့်။")
+
+# --- STARTUP ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await message.answer("🇲🇲 **Zefoy Views Booster Bot**\n\nTikTok Video Link ကို ပို့ပေးပါ။ Captcha ကျလာရင် ပုံရိုက်ပြီး ပြန်ပို့ပေးပါမယ် Shine!")
-
-@dp.message(F.text.contains("tiktok.com"))
-async def handle_link(message: types.Message, state: FSMContext):
-    video_url = message.text.strip()
-    wait_msg = await message.answer("⌛ Zefoy ကို သွားနေပါပြီ။ ခဏစောင့်ပါ...")
-
-    try:
-        driver.get("https://zefoy.com/")
-        time.sleep(5) # Page Load ဖြစ်အောင် စောင့်မယ်
-        
-        # ၁။ Captcha ပုံကို ရှာပြီး Screenshot ရိုက်မယ်
-        captcha_img = driver.find_element(By.TAG_NAME, "img")
-        photo_path = f"captcha_{message.from_user.id}.png"
-        captcha_img.screenshot(photo_path)
-        
-        # ၂။ User ဆီ ပုံပြန်ပို့မယ်
-        photo = types.FSInputFile(photo_path)
-        await message.answer_photo(photo=photo, caption="📸 ပုံထဲက စာလုံးတွေကို အဖြေပြန်ရိုက်ပေးပါ Shine!")
-        
-        # State နဲ့ URL ကို သိမ်းထားမယ်
-        await state.set_state(ZefoyState.waiting_for_captcha)
-        await state.update_data(video_url=video_url)
-        
-        # ပုံဖိုင်ကို ဖျက်မယ်
-        os.remove(photo_path)
-        await wait_msg.delete()
-
-    except Exception as e:
-        await message.answer(f"❌ Error: {str(e)}")
-
-@dp.message(ZefoyState.waiting_for_captcha)
-async def solve_captcha(message: types.Message, state: FSMContext):
-    captcha_answer = message.text.strip()
-    data = await state.get_data()
-    video_url = data.get("video_url")
-    
-    wait_msg = await message.answer("⌛ Captcha ကို စစ်ဆေးနေပါပြီ...")
-
-    try:
-        # ၃။ Captcha အဖြေကို ရိုက်ထည့်မယ်
-        input_box = driver.find_element(By.TAG_NAME, "input")
-        input_box.clear()
-        input_box.send_keys(captcha_answer)
-        
-        # Submit နှိပ်မယ်
-        driver.find_element(By.XPATH, "//button").click()
-        time.sleep(5)
-        
-        # ၄။ Views တိုးတဲ့ အပိုင်း (Zefoy ရဲ့ HTML ပေါ် မူတည်ပြီး ပြင်ရနိုင်သည်)
-        # ဤနေရာတွင် ရှာတွေ့သည့် Views ခလုတ်ကို နှိပ်ခိုင်းမည်
-        await wait_msg.edit_text(f"✅ Captcha အောင်မြင်ပုံရပါတယ်။ {video_url} အတွက် Views တိုးပေးနေပါပြီ!")
-        
-        # လုပ်ငန်းစဉ်ပြီးရင် State ကို Clear လုပ်မယ်
-        await state.clear()
-
-    except Exception as e:
-        await message.answer(f"❌ Error: {str(e)}")
-        await state.clear()
+    await message.answer(f"🤖 ကျွန်တော့်နာမည် {BOT_NAME} ပါဗျ!\n\nGroup ထဲမှာ စကားပြောချင်ရင် '{BOT_NAME}' လို့ ထည့်ပြောပေးပါနော် ။")
 
 async def main():
-    print("Bot is running...")
-    await dp.start_polling(bot)
+    server_task = asyncio.create_task(start_web_server())
+    poll_task = asyncio.create_task(dp.start_polling(bot))
+    await asyncio.gather(server_task, poll_task)
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -5,27 +5,31 @@ import socketserver
 import threading
 import requests
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
 
-# ၁။ Logging စနစ်
+# ၁။ Logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Render Port Fix (Render ပေါ်မှာ Bot မသေအောင် လုပ်ပေးတာပါ)
+# Render Port Fix
 def run_dummy_server():
     port = int(os.environ.get("PORT", 8080))
     handler = http.server.SimpleHTTPRequestHandler
     try:
         with socketserver.TCPServer(("", port), handler) as httpd:
-            logging.info(f"Port {port} is active.")
             httpd.serve_forever()
-    except Exception as e:
-        logging.error(f"Server Error: {e}")
+    except Exception: pass
 
-# ၂။ Background ဖျက်ပေးမည့် Function
+# ၂။ Anime ပြောင်းပေးတဲ့ Function (Free AI)
+def convert_to_anime(image_url):
+    # Pollinations AI ကို သုံးပြီး ပုံစံပြောင်းမယ်
+    prompt = "convert this image to high quality anime style, studio ghibli, vibrant colors, detailed"
+    encoded_prompt = requests.utils.quote(prompt)
+    anime_url = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&seed=42&model=flux&image={image_url}"
+    return anime_url
+
+# ၃။ Background ဖျက်ပေးတဲ့ Function
 def remove_background(image_path, output_path):
-    # မောင့်ရဲ့ API Key ကို ဒီမှာ ထည့်ထားပေးတယ်
     API_KEY = 'JL152Nmq2qJiPfe5bn6ZmDqF' 
-    
     try:
         response = requests.post(
             'https://api.remove.bg/v1.0/removebg',
@@ -33,60 +37,49 @@ def remove_background(image_path, output_path):
             data={'size': 'auto'},
             headers={'X-API-Key': API_KEY},
         )
-        
         if response.status_code == 200:
             with open(output_path, 'wb') as out:
                 out.write(response.content)
             return True
-        else:
-            logging.error(f"Remove.bg Error: {response.text}")
-            return False
-    except Exception as e:
-        logging.error(f"Process Error: {e}")
         return False
+    except Exception: return False
 
-# ၃။ ပုံဝင်လာရင် ကိုင်တွယ်မည့် Handler
+# ၄။ ပုံဝင်လာရင် ကိုင်တွယ်မည့် Handler
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.photo: return
+    user_msg = update.message.caption if update.message.caption else ""
     
-    # User ကို အကြောင်းကြားစာ ပို့မယ်
-    status_msg = await update.message.reply_text("ခဏစောင့်ပါ မောင်... Background ဖျက်ပေးနေပါတယ်။ ✨")
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="upload_document")
-    
-    # ပုံကို ဒေါင်းလုဒ် ဆွဲမယ်
+    # ပုံကို အရင် Download ဆွဲမယ်
     photo = await update.message.photo[-1].get_file()
-    input_file = f"{photo.file_id}.jpg"
-    output_file = f"{photo.file_id}_nobg.png"
-    await photo.download_to_drive(input_file)
-    
-    # Background ဖျက်ခြင်း အလုပ်စလုပ်မယ်
-    if remove_background(input_file, output_file):
-        # အောင်မြင်ရင် PNG ဖိုင် (Document) အနေနဲ့ ပို့မယ် (ပုံမဝါးအောင်လို့ပါ)
-        with open(output_file, 'rb') as doc:
-            await update.message.reply_document(document=doc, caption="ဟောဒီမှာ မောင့်အတွက် Background ဖျက်ပြီးသားပုံလေး! ❤️")
-    else:
-        await update.message.reply_text("ဆောရီး မောင်... တစ်ခုခု မှားနေလို့ Background ဖျက်လို့ မရဘူးဖြစ်နေတယ်။ API limit ပြည့်သွားတာလား စစ်ပေးပါဦး။")
-    
-    # ဆာဗာပေါ်မှာ နေရာမယူအောင် ဖိုင်တွေကို ပြန်ဖျက်မယ်
-    if os.path.exists(input_file): os.remove(input_file)
-    if os.path.exists(output_file): os.remove(output_file)
-    await status_msg.delete()
+    img_path = f"{photo.file_id}.jpg"
+    await photo.download_to_drive(img_path)
 
-# ၄။ ပင်မ လုပ်ဆောင်ချက်
-if __name__ == '__main__':
-    # Port Server ကို Background မှာ နှိုးမယ်
-    threading.Thread(target=run_dummy_server, daemon=True).start()
+    # အကယ်၍ Caption မှာ 'anime' လို့ပါရင် Anime ပြောင်းမယ်
+    if 'anime' in user_msg.lower():
+        status = await update.message.reply_text("Anime ရုပ်လေး ပြောင်းပေးနေတယ် မောင်... ❤️")
+        # Telegram ရဲ့ File URL ကို ယူပြီး AI ဆီ ပို့မယ်
+        anime_result = convert_to_anime(photo.file_path)
+        await update.message.reply_photo(photo=anime_result, caption="ဟောဒီမှာ မောင့်ရဲ့ Anime ပုံလေး! ✨")
+        await status.delete()
     
-    # မောင့်ရဲ့ Telegram Bot Token
+    # ပုံမှန်ဆိုရင် Background ပဲ ဖျက်ပေးမယ်
+    else:
+        status = await update.message.reply_text("Background ဖျက်ပေးနေပါတယ် မောင်... ✨")
+        out_path = f"{photo.file_id}_nobg.png"
+        if remove_background(img_path, out_path):
+            await update.message.reply_document(document=open(out_path, 'rb'), caption="Background ဖျက်ပြီးပါပြီ!")
+        else:
+            await update.message.reply_text("ဆောရီး မောင်... Background ဖျက်လို့ မရဘူးဖြစ်နေတယ်။")
+        if os.path.exists(out_path): os.remove(out_path)
+
+    if os.path.exists(img_path): os.remove(img_path)
+
+# ၅။ Main
+if __name__ == '__main__':
+    threading.Thread(target=run_dummy_server, daemon=True).start()
     TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI' 
     
-    try:
-        app = ApplicationBuilder().token(TOKEN).build()
-        
-        # ဓာတ်ပုံ သီးသန့်ကိုပဲ လက်ခံမယ်
-        app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-        
-        logging.info("--- Background Remover Bot Started ---")
-        app.run_polling(drop_pending_updates=True, stop_signals=None)
-    except Exception as e:
-        logging.error(f"Fatal Error: {e}")
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    
+    print("Bot is running with Anime & BG Remover...")
+    app.run_polling(drop_pending_updates=True, stop_signals=None)

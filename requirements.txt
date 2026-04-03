@@ -1,2 +1,2 @@
 python-telegram-bot
-duckduckgo-search==6.3.2
+requests

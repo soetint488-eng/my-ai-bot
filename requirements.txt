@@ -1,2 +1,2 @@
-duckduckgo-search
 python-telegram-bot
+duckduckgo-search

@@ -10,30 +10,23 @@ from duckduckgo_search import DDGS
 # ၁။ Logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Render အတွက် Port အတု
+# Render Port Fix
 def run_dummy_server():
     port = int(os.environ.get("PORT", 8080))
     handler = http.server.SimpleHTTPRequestHandler
     with socketserver.TCPServer(("", port), handler) as httpd:
         httpd.serve_forever()
 
-# ၂။ DuckDuckGo AI Function (Syntax အသစ်)
+# ၂။ DuckDuckGo AI Function (Version 6.3.2 Syntax)
 def get_ai_response(user_text):
     try:
-        # Version 7.x မှာ chat function ကို ဒီလို ခေါ်ရပါတယ်
+        # Version 6.3.2 မှာ DDGS().chat() က အလုပ်လုပ်ပါတယ်
         with DDGS() as ddgs:
-            # model ကို 'gpt-4o-mini' သို့မဟုတ် 'llama-3-70b' သုံးနိုင်ပါတယ်
             response = ddgs.chat(user_text, model='gpt-4o-mini')
             return response
     except Exception as e:
-        # အပေါ်ကနည်းနဲ့ မရရင် နောက်တစ်နည်း (Older way fallback)
-        try:
-            from duckduckgo_search import DDGS
-            with DDGS() as ddgs:
-                results = ddgs.chat(user_text)
-                return results
-        except Exception as e2:
-            return f"Error: {str(e2)}"
+        # အကယ်၍ Error တက်နေသေးရင် နောက်တစ်နည်းနဲ့ စမ်းမယ်
+        return f"ခဏလေးနော် မောင်... Error တက်နေလို့ပါ။ (Error: {str(e)})"
 
 # ၃။ Message Handler
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -47,13 +40,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ၄။ Main
 if __name__ == '__main__':
+    # Port Server ကို အရင်နှိုးမယ်
     threading.Thread(target=run_dummy_server, daemon=True).start()
     
     # မောင့်ရဲ့ Bot Token
     TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI' 
     
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    
-    print("Bot is starting with DDGS v7+ Support...")
-    app.run_polling(drop_pending_updates=True)
+    try:
+        app = ApplicationBuilder().token(TOKEN).build()
+        app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+        
+        print("Bot is starting with DDGS Fixed Version...")
+        app.run_polling(drop_pending_updates=True)
+    except Exception as e:
+        print(f"Start Error: {e}")

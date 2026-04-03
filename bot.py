@@ -7,24 +7,31 @@ import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
-# ၁။ Logging
+# ၁။ Logging သတ်မှတ်ချက်
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Render Port Fix
+# ၂။ Render Port Error မတက်အောင် Port အတု ဖွင့်ပေးခြင်း
 def run_dummy_server():
+    # Render က ပေးတဲ့ PORT (သို့မဟုတ်) 8080 ကို သုံးမယ်
     port = int(os.environ.get("PORT", 8080))
     handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", port), handler) as httpd:
-        httpd.serve_forever()
+    
+    # Port ကို အမြဲ နားထောင်နေအောင် လုပ်ပေးထားတယ်
+    try:
+        with socketserver.TCPServer(("", port), handler) as httpd:
+            logging.info(f"Dummy Server running on port {port}")
+            httpd.serve_forever()
+    except Exception as e:
+        logging.error(f"Server Error: {e}")
 
-# ၂။ Pollinations AI Function (DuckDuckGo အစားထိုး)
+# ၃။ AI ဆီက အဖြေတောင်းတဲ့ Function
 def get_ai_response(user_text):
     try:
-        # Pollinations AI က API Key မလိုဘဲ အခမဲ့ သုံးလို့ရပါတယ်
-        prompt = requests.utils.quote(user_text)
-        url = f"https://text.pollinations.ai/{prompt}?model=openai&system=မင်းကအမြဲတမ်းမြန်မာလိုပဲဖြေပေးရမယ်"
+        # Prompt ထဲမှာ မြန်မာလိုပဲ ပြန်ဖြေခိုင်းထားတယ်
+        encoded_text = requests.utils.quote(user_text)
+        url = f"https://text.pollinations.ai/{encoded_text}?model=openai&system=You are a helpful assistant. Always reply in Myanmar language."
         
-        response = requests.get(url)
+        response = requests.get(url, timeout=30)
         if response.status_code == 200:
             return response.text
         else:
@@ -32,26 +39,40 @@ def get_ai_response(user_text):
     except Exception as e:
         return f"Error: {str(e)}"
 
-# ၃။ Message Handler
+# ၄။ စာဝင်လာရင် တုံ့ပြန်မယ့် Handler
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text: return
+    if not update.message or not update.message.text: 
+        return
+        
     user_input = update.message.text
+    
+    # Bot က စဉ်းစားနေတဲ့ 'typing...' ပုံစံပြမယ်
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
+    # AI အဖြေယူမယ်
     ai_reply = get_ai_response(user_input)
+    
+    # User ဆီ အဖြေပြန်ပို့မယ်
     await update.message.reply_text(ai_reply)
 
-# ၄။ Main
+# ၅။ Bot စတင်နှိုးဆော်ခြင်း
 if __name__ == '__main__':
+    # Render ရဲ့ Port Scan ကို ကျော်ဖို့ Background Thread နဲ့ Run မယ်
     threading.Thread(target=run_dummy_server, daemon=True).start()
     
+    # မောင့်ရဲ့ Bot Token
     TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI' 
     
     try:
         app = ApplicationBuilder().token(TOKEN).build()
+        
+        # Message Handler ထည့်သွင်းခြင်း
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
         
-        print("Bot is starting with Pollinations AI...")
-        app.run_polling(drop_pending_updates=True)
+        logging.info("--- Bot is starting with Pollinations AI ---")
+        
+        # Render ပေါ်မှာ အဆင်ပြေအောင် stop_signals=None ထည့်ထားတယ်
+        app.run_polling(drop_pending_updates=True, stop_signals=None)
+        
     except Exception as e:
-        print(f"Start Error: {e}")
+        logging.error(f"Start Error: {e}")

@@ -7,72 +7,86 @@ import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
-# ၁။ Logging သတ်မှတ်ချက်
+# ၁။ Logging စနစ်
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# ၂။ Render Port Error မတက်အောင် Port အတု ဖွင့်ပေးခြင်း
+# Render Port Fix (Render ပေါ်မှာ Bot မသေအောင် လုပ်ပေးတာပါ)
 def run_dummy_server():
-    # Render က ပေးတဲ့ PORT (သို့မဟုတ်) 8080 ကို သုံးမယ်
     port = int(os.environ.get("PORT", 8080))
     handler = http.server.SimpleHTTPRequestHandler
-    
-    # Port ကို အမြဲ နားထောင်နေအောင် လုပ်ပေးထားတယ်
     try:
         with socketserver.TCPServer(("", port), handler) as httpd:
-            logging.info(f"Dummy Server running on port {port}")
+            logging.info(f"Port {port} is active.")
             httpd.serve_forever()
     except Exception as e:
         logging.error(f"Server Error: {e}")
 
-# ၃။ AI ဆီက အဖြေတောင်းတဲ့ Function
-def get_ai_response(user_text):
+# ၂။ Background ဖျက်ပေးမည့် Function
+def remove_background(image_path, output_path):
+    # မောင့်ရဲ့ API Key ကို ဒီမှာ ထည့်ထားပေးတယ်
+    API_KEY = 'JL152Nmq2qJiPfe5bn6ZmDqF' 
+    
     try:
-        # Prompt ထဲမှာ မြန်မာလိုပဲ ပြန်ဖြေခိုင်းထားတယ်
-        encoded_text = requests.utils.quote(user_text)
-        url = f"https://text.pollinations.ai/{encoded_text}?model=openai&system=You are a helpful assistant. Always reply in Myanmar language."
+        response = requests.post(
+            'https://api.remove.bg/v1.0/removebg',
+            files={'image_file': open(image_path, 'rb')},
+            data={'size': 'auto'},
+            headers={'X-API-Key': API_KEY},
+        )
         
-        response = requests.get(url, timeout=30)
         if response.status_code == 200:
-            return response.text
+            with open(output_path, 'wb') as out:
+                out.write(response.content)
+            return True
         else:
-            return "ခဏလေးနော် မောင်... AI ဘက်က အလုပ်မလုပ်လို့ပါ။"
+            logging.error(f"Remove.bg Error: {response.text}")
+            return False
     except Exception as e:
-        return f"Error: {str(e)}"
+        logging.error(f"Process Error: {e}")
+        return False
 
-# ၄။ စာဝင်လာရင် တုံ့ပြန်မယ့် Handler
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text: 
-        return
-        
-    user_input = update.message.text
+# ၃။ ပုံဝင်လာရင် ကိုင်တွယ်မည့် Handler
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.photo: return
     
-    # Bot က စဉ်းစားနေတဲ့ 'typing...' ပုံစံပြမယ်
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    # User ကို အကြောင်းကြားစာ ပို့မယ်
+    status_msg = await update.message.reply_text("ခဏစောင့်ပါ မောင်... Background ဖျက်ပေးနေပါတယ်။ ✨")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="upload_document")
     
-    # AI အဖြေယူမယ်
-    ai_reply = get_ai_response(user_input)
+    # ပုံကို ဒေါင်းလုဒ် ဆွဲမယ်
+    photo = await update.message.photo[-1].get_file()
+    input_file = f"{photo.file_id}.jpg"
+    output_file = f"{photo.file_id}_nobg.png"
+    await photo.download_to_drive(input_file)
     
-    # User ဆီ အဖြေပြန်ပို့မယ်
-    await update.message.reply_text(ai_reply)
+    # Background ဖျက်ခြင်း အလုပ်စလုပ်မယ်
+    if remove_background(input_file, output_file):
+        # အောင်မြင်ရင် PNG ဖိုင် (Document) အနေနဲ့ ပို့မယ် (ပုံမဝါးအောင်လို့ပါ)
+        with open(output_file, 'rb') as doc:
+            await update.message.reply_document(document=doc, caption="ဟောဒီမှာ မောင့်အတွက် Background ဖျက်ပြီးသားပုံလေး! ❤️")
+    else:
+        await update.message.reply_text("ဆောရီး မောင်... တစ်ခုခု မှားနေလို့ Background ဖျက်လို့ မရဘူးဖြစ်နေတယ်။ API limit ပြည့်သွားတာလား စစ်ပေးပါဦး။")
+    
+    # ဆာဗာပေါ်မှာ နေရာမယူအောင် ဖိုင်တွေကို ပြန်ဖျက်မယ်
+    if os.path.exists(input_file): os.remove(input_file)
+    if os.path.exists(output_file): os.remove(output_file)
+    await status_msg.delete()
 
-# ၅။ Bot စတင်နှိုးဆော်ခြင်း
+# ၄။ ပင်မ လုပ်ဆောင်ချက်
 if __name__ == '__main__':
-    # Render ရဲ့ Port Scan ကို ကျော်ဖို့ Background Thread နဲ့ Run မယ်
+    # Port Server ကို Background မှာ နှိုးမယ်
     threading.Thread(target=run_dummy_server, daemon=True).start()
     
-    # မောင့်ရဲ့ Bot Token
+    # မောင့်ရဲ့ Telegram Bot Token
     TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI' 
     
     try:
         app = ApplicationBuilder().token(TOKEN).build()
         
-        # Message Handler ထည့်သွင်းခြင်း
-        app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+        # ဓာတ်ပုံ သီးသန့်ကိုပဲ လက်ခံမယ်
+        app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         
-        logging.info("--- Bot is starting with Pollinations AI ---")
-        
-        # Render ပေါ်မှာ အဆင်ပြေအောင် stop_signals=None ထည့်ထားတယ်
+        logging.info("--- Background Remover Bot Started ---")
         app.run_polling(drop_pending_updates=True, stop_signals=None)
-        
     except Exception as e:
-        logging.error(f"Start Error: {e}")
+        logging.error(f"Fatal Error: {e}")

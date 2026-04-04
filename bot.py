@@ -19,22 +19,25 @@ def run_dummy_server():
 # ၂။ API Keys များ
 REMOVE_BG_API = 'JL152Nmq2qJiPfe5bn6ZmDqF'
 GEMINI_API_KEY = 'AIzaSyDVotL1VA-aJ9wI7nWaduQwSvpmkyf4ZZY'
+# မောင့်ရဲ့ Bot Token အသစ်
+BOT_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
 
-# Gemini AI ကို ချိတ်ဆက်ခြင်း
+# Gemini AI Configuration
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# ၃။ Gemini နဲ့ စကားပြောမည့် Function
+# ၃။ Gemini နဲ့ စကားပြောမည့် Function (Chat AI)
 async def chat_with_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     if not user_text: return
 
-    # စာသားဝင်လာရင် AI က ပြန်ဖြေပေးမယ်
     try:
+        # User ရိုက်လိုက်တဲ့စာကို Gemini ဆီ ပို့ပြီး အဖြေတောင်းမယ်
         response = model.generate_content(user_text)
         await update.message.reply_text(response.text)
     except Exception as e:
-        await update.message.reply_text("ဆောရီး မောင်... AI က ခဏနားနေလို့ပါ။")
+        logging.error(f"Gemini Error: {e}")
+        await update.message.reply_text("ဆောရီး မောင်... AI က ခဏ အနားယူနေလို့ နောက်မှ ပြန်မေးပေးပါဦး။")
 
 # ၄။ Photo Handler (Buttons ပြမည့်အပိုင်း)
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -42,6 +45,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_path = f"{photo_file.file_id}.jpg"
     await photo_file.download_to_drive(file_path)
     
+    # ယာယီ သိမ်းဆည်းခြင်း
     context.user_data['last_photo'] = file_path
     context.user_data['caption'] = update.message.caption if update.message.caption else "Dominic AI"
 
@@ -61,13 +65,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     img_path = context.user_data.get('last_photo')
 
+    if not img_path:
+        await query.message.reply_text("ပုံကို အရင်ပို့ပေးပါ မောင်!")
+        return
+
     if data == 'check_credit':
         res = requests.get('https://api.remove.bg/v1.0/account', headers={'X-API-Key': REMOVE_BG_API})
         credit = res.json()['data']['attributes']['credits']['total'] if res.status_code == 200 else "Error"
-        await query.message.reply_text(text=f"Credit {credit} ခု ကျန်သေးတယ် မောင်! ✨")
+        await query.message.reply_text(text=f"Credit {credit} ခု ကျန်သေးတယ်နော် မောင်! ✨")
 
     elif data == 'remove_bg':
-        await query.edit_message_text(text="Background ဖျက်ပေးနေတယ်... ✨")
+        await query.message.reply_text(text="စီစဉ်ပေးနေတယ် မောင်... ခဏစောင့်နော်။ ✨")
         res = requests.post('https://api.remove.bg/v1.0/removebg',
                             files={'image_file': open(img_path, 'rb')},
                             data={'size': 'auto'},
@@ -75,29 +83,34 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if res.status_code == 200:
             out_path = f"nobg_{img_path}.png"
             with open(out_path, 'wb') as f: f.write(res.content)
-            await query.message.reply_document(document=open(out_path, 'rb'))
+            await query.message.reply_document(document=open(out_path, 'rb'), caption="ရပါပြီ မောင်!")
         else:
-            await query.message.reply_text("Error တက်သွားတယ် မောင်။")
+            await query.message.reply_text("Error တက်သွားတယ် မောင်။ Credit ကုန်နေတာ ဖြစ်နိုင်ပါတယ်။")
 
     elif data == 'add_text':
-        await query.edit_message_text(text="ပုံပေါ်စာရေးပေးနေတယ်... ✍️")
+        await query.message.reply_text(text="ပုံပေါ်စာရေးပေးနေတယ်... ✨")
         img = Image.open(img_path)
         draw = ImageDraw.Draw(img)
-        draw.text((img.size[0]/2, img.size[1]/2), context.user_data.get('caption'), fill="white", anchor="mm")
+        # စာသားအရွယ်အစားကို ပုံနဲ့လိုက်အောင် ချိန်ညှိမယ်
+        w, h = img.size
+        draw.text((w/2, h/2), context.user_data.get('caption'), fill="white", anchor="mm")
         out_text = f"text_{img_path}"
         img.save(out_text)
-        await query.message.reply_photo(photo=open(out_text, 'rb'))
+        await query.message.reply_photo(photo=open(out_text, 'rb'), caption="စာသားထည့်ပေးလိုက်ပြီနော် မောင်!")
 
-# ၆။ Main
+# ၆။ Main Setup
 if __name__ == '__main__':
+    # Render Port Fix
     threading.Thread(target=run_dummy_server, daemon=True).start()
-    TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI'
-    app = ApplicationBuilder().token(TOKEN).build()
     
-    # Handler များ (စာပို့ရင် AI က ဖြေမယ်၊ ပုံပို့ရင် Button ပြမယ်)
+    # Bot Application ကို Token အသစ်နဲ့ စတင်မယ်
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    # Handler တွေ ထည့်မယ်
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    # စာသားရိုက်ရင် AI က ဖြေပေးဖို့ (Command မဟုတ်တဲ့ စာသားအားလုံး)
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), chat_with_ai))
     
-    print("AI Bot is running now!")
+    print("Dominic AI Bot is Running with New Token!")
     app.run_polling(drop_pending_updates=True)

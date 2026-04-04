@@ -87,7 +87,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     threading.Thread(target=run_dummy_server, daemon=True).start()
     
-    TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI'
+    TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
     app = ApplicationBuilder().token(TOKEN).build()
     
     # Handler တွေ ထည့်မယ်

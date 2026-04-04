@@ -19,70 +19,76 @@ def run_dummy_server():
     with TCPServer(("", port), SimpleHTTPRequestHandler) as httpd:
         httpd.serve_forever()
 
-# --- MLBB CHECK FUNCTION ---
+# --- CORE FUNCTION ---
 def check_mlbb_data(user_id, zone_id):
     url = f"https://{RAPIDAPI_HOST}/mobile-legends/{user_id}/{zone_id}"
-    headers = {
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": RAPIDAPI_HOST
-    }
+    headers = {"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_HOST}
     try:
         response = requests.get(url, headers=headers, timeout=15)
-        if response.status_code == 200:
-            return response.json(), None
-        else:
-            return None, f"Error: {response.status_code}"
+        return (response.json(), None) if response.status_code == 200 else (None, f"Error: {response.status_code}")
     except Exception as e:
         return None, str(e)
 
 # --- COMMAND HANDLERS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_msg = (
-        "✨ **DOMINIC MLBB CHECKER**\n\n"
-        "To check a player nickname, use:\n"
-        "👉 `/id [User_ID] [Zone_ID]`\n\n"
-        "**Example:**\n"
-        "`/id 12345678 1234`"
+    msg = (
+        "✨ **DOMINIC MLBB UTILITY**\n\n"
+        "Commands Available:\n"
+        "👉 `/id [ID] [Zone]` - Check Nickname\n"
+        "👉 `/servers` - View Server Regions\n\n"
+        "💡 *Tap any text to copy instantly!*"
     )
-    await update.message.reply_text(welcome_msg, parse_mode='Markdown')
+    await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
-        await update.message.reply_text("❌ **Invalid Format!**\nUse: `/id [User_ID] [Zone_ID]`", parse_mode='Markdown')
+        await update.message.reply_text("❌ **Format:** `/id [ID] [Zone]`", parse_mode='Markdown')
         return
     
-    u_id = context.args[0]
-    z_id = context.args[1]
-    
-    status_msg = await update.message.reply_text("🔍 **Searching Database...**", parse_mode='Markdown')
-
+    u_id, z_id = context.args[0], context.args[1]
+    status_msg = await update.message.reply_text("🔍 **Searching...**", parse_mode='Markdown')
     data, error = check_mlbb_data(u_id, z_id)
     
     if data and 'data' in data:
         nickname = data['data'].get('username', 'Unknown')
         
+        # Format with `backticks` for Auto-Copy feature
         result = (
             "🎮 **PLAYER FOUND**\n"
             "━━━━━━━━━━━━━━━\n"
-            "👤 **Nickname:** `{}`\n"
-            "🆔 **User ID:** `{}`\n"
-            "🌐 **Zone ID:** `{}`\n"
+            "👤 **Name:** `{}`\n"
+            "🆔 **ID:** `{}`\n"
+            "🌐 **Zone:** `{}`\n"
             "━━━━━━━━━━━━━━━\n"
-            "✅ **Verified by Dominic**"
+            "✅ **Verified by Dominic**\n"
+            "💡 *Tap the name to copy!*"
         ).format(nickname, u_id, z_id)
         
         await status_msg.edit_text(result, parse_mode='Markdown')
     else:
-        await status_msg.edit_text("⚠️ **ERROR:** Player Not Found.", parse_mode='Markdown')
+        await status_msg.edit_text("⚠️ **ERROR:** ID not found.", parse_mode='Markdown')
+
+async def servers_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    server_list = (
+        "🌐 **SERVER REGIONS**\n"
+        "━━━━━━━━━━━━━━━\n"
+        "🇲🇲 **SEA:** `2xxx, 3xxx, 4xxx, 5xxx, 6xxx`\n"
+        "🇧🇷 **LATAM:** `7xxx`\n"
+        "🇪🇺 **Europe:** `8xxx`\n"
+        "🇺🇸 **NA:** `9xxx`\n"
+        "━━━━━━━━━━━━━━━\n"
+        "💡 *Click numbers to copy.*"
+    )
+    await update.message.reply_text(server_list, parse_mode='Markdown')
 
 # --- MAIN ---
 if __name__ == '__main__':
     threading.Thread(target=run_dummy_server, daemon=True).start()
-    
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("id", id_handler))
+    app.add_handler(CommandHandler("servers", servers_handler))
     
-    print("MLBB Checker Bot is Online.")
+    print("Dominic MLBB Bot is Online with Auto-Copy.")
     app.run_polling(drop_pending_updates=True)

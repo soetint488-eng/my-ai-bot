@@ -4,8 +4,9 @@ import requests
 import threading
 import http.server
 import socketserver
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from PIL import Image, ImageDraw, ImageFont
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 
 # ၁။ Logging & Render Fix
 logging.basicConfig(level=logging.INFO)
@@ -14,65 +15,87 @@ def run_dummy_server():
     with socketserver.TCPServer(("", port), http.server.SimpleHTTPRequestHandler) as httpd:
         httpd.serve_forever()
 
-# ၂။ Background အစားထိုးပေးမည့် Function (ပိုပြီး တည်ငြိမ်အောင် ပြင်ထားသည်)
-def replace_background(image_path, output_path, bg_text):
-    API_KEY = 'JL152Nmq2qJiPfe5bn6ZmDqF' 
-    
-    # Background options ကို သတ်မှတ်မယ်
-    payload = {
-        'size': 'auto',
-    }
-    
-    # မောင်က ကာလာကုဒ် ရိုက်ရင် (ဥပမာ red, blue သို့ #ff0000)
-    if bg_text.startswith('#') or bg_text.lower() in ['red', 'blue', 'green', 'yellow', 'white', 'black']:
-        payload['bg_color'] = bg_text
-    # မောင်က စာသားရိုက်ရင် (ဥပမာ beach)
-    elif bg_text:
-        payload['bg_image_url'] = f"https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1024&q=80" # နမူနာ Beach ပုံ တစ်ပုံ အရင်စမ်းမယ်
+API_KEY = 'JL152Nmq2qJiPfe5bn6ZmDqF'
 
+# ၂။ Credit စစ်တဲ့ Function
+def get_credit():
+    response = requests.get('https://api.remove.bg/v1.0/account', headers={'X-API-Key': API_KEY})
+    if response.status_code == 200:
+        data = response.json()
+        return data['data']['attributes']['credits']['total']
+    return "Error"
+
+# ၃။ ပုံပေါ်မှာ စာရိုက်တဲ့ Function
+def add_text_to_image(input_path, output_path, text):
+    img = Image.open(input_path)
+    draw = ImageDraw.Draw(img)
+    # စာသားအရွယ်အစားကို ပုံနဲ့လိုက်ဖက်အောင် ချိန်ညှိမယ်
+    width, height = img.size
+    font_size = int(height / 10)
     try:
-        response = requests.post(
-            'https://api.remove.bg/v1.0/removebg',
-            files={'image_file': open(image_path, 'rb')},
-            data=payload,
-            headers={'X-API-Key': API_KEY},
-        )
-        
-        if response.status_code == 200:
-            with open(output_path, 'wb') as out:
-                out.write(response.content)
-            return True
-        else:
-            logging.error(f"API Error: {response.text}")
-            return False
-    except Exception as e:
-        logging.error(f"Request Error: {e}")
-        return False
+        font = ImageFont.truetype("arial.ttf", font_size) # Font မရှိရင် default သုံးမယ်
+    except:
+        font = ImageFont.load_default()
+    
+    draw.text((width/2, height/2), text, fill="white", anchor="mm", font=font)
+    img.save(output_path)
 
-# ၃။ Photo Handler
+# ၄။ Photo Handler (Buttons ပြပေးမည့်အပိုင်း)
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_caption = update.message.caption if update.message.caption else ""
-    status = await update.message.reply_text("စီစဉ်ပေးနေတယ် မောင်... ခဏစောင့်နော်။ ✨")
-    
     photo = await update.message.photo[-1].get_file()
-    input_file = f"{photo.file_id}.jpg"
-    output_file = f"{photo.file_id}_done.png"
-    await photo.download_to_drive(input_file)
-    
-    # အကယ်၍ Caption မှာ စာပါရင် နောက်ခံပြောင်းမယ်၊ မပါရင် ပုံမှန်ပဲ ဖျက်မယ်
-    if replace_background(input_file, output_file, user_caption):
-        await update.message.reply_document(document=open(output_file, 'rb'), caption=f"ရပါပြီ မောင်! ❤️")
-    else:
-        await update.message.reply_text("ဆောရီး မောင်... API Credit ကုန်နေတာ (သို့မဟုတ်) Link မှားနေတာ ဖြစ်နိုင်တယ်ဗျ။")
-    
-    if os.path.exists(input_file): os.remove(input_file)
-    if os.path.exists(output_file): os.remove(output_file)
-    await status.delete()
+    file_path = f"{photo.file_id}.jpg"
+    await photo.download_to_drive(file_path)
+    context.user_data['last_photo'] = file_path
+    context.user_data['caption'] = update.message.caption if update.message.caption else "Dominic AI"
 
-# ၄။ Main
+    keyboard = [
+        [InlineKeyboardButton("💳 Credit စစ်မယ်", callback_data='check_credit')],
+        [InlineKeyboardButton("🖼️ Background ဖျက်မယ်", callback_data='remove_bg')],
+        [InlineKeyboardButton("✍️ ပုံပေါ်စာရိုက်မယ်", callback_data='add_text')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("ဘာလုပ်ချင်လဲ ရွေးပေးပါ မောင်-", reply_markup=reply_markup)
+
+# ၅။ Button နှိပ်ရင် အလုပ်လုပ်မည့်အပိုင်း
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    img_path = context.user_data.get('last_photo')
+    if not img_path: return
+
+    if query.data == 'check_credit':
+        credit = get_credit()
+        await query.edit_message_text(text=f"မောင့်ဆီမှာ Credit {credit} ခု ကျန်သေးတယ်နော်! ✨")
+
+    elif query.data == 'remove_bg':
+        await query.edit_message_text(text="Background ဖျက်ပေးနေတယ် မောင်... ခဏစောင့်နော်။")
+        out_path = f"nobg_{img_path}"
+        res = requests.post('https://api.remove.bg/v1.0/removebg',
+                            files={'image_file': open(img_path, 'rb')},
+                            data={'size': 'auto'},
+                            headers={'X-API-Key': API_KEY})
+        if res.status_code == 200:
+            with open(out_path, 'wb') as f: f.write(res.content)
+            await query.message.reply_document(document=open(out_path, 'rb'))
+        else:
+            await query.message.reply_text("Error တက်သွားတယ် မောင်။")
+
+    elif query.data == 'add_text':
+        await query.edit_message_text(text="ပုံပေါ်မှာ စာသားလေး ထည့်ပေးနေတယ်... ✨")
+        out_text_path = f"text_{img_path}"
+        text_to_write = context.user_data.get('caption', 'Dominic')
+        add_text_to_image(img_path, out_text_path, text_to_write)
+        await query.message.reply_photo(photo=open(out_text_path, 'rb'), caption="စာသားထည့်ပေးလိုက်ပြီ မောင်!")
+
+# ၆။ Main
 if __name__ == '__main__':
     threading.Thread(target=run_dummy_server, daemon=True).start()
     TOKEN = '8702294693:AAExt0a40BMgE0kEjlMnFmwB_zfRZn37-lI'
     app = ApplicationBuilder().token(TOKEN).build()
+    
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(CallbackQueryHandler(button_callback))
+    
+    print("Buttons Bot is running...")
     app.run_polling(drop_pending_updates=True)

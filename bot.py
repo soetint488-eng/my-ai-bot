@@ -7,12 +7,21 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Callb
 BOT_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
 ADMIN_ID = 8584422107  
 DOWNLOAD_DIR = "downloads"
-PATH_FILE = "paths.txt" # Path များကို သိမ်းဆည်းမည့်ဖိုင်
+PATH_FILE = "paths.txt"
+NOTE_FILE = "app_note.txt" # Note သိမ်းမည့်ဖိုင်
 
 if not os.path.exists(DOWNLOAD_DIR): 
     os.makedirs(DOWNLOAD_DIR)
 
-# Path များကို Load လုပ်ရန် (မရှိလျှင် အလွတ်ဆောက်မည်)
+# Note ကို Load လုပ်ရန်
+app_note = "Welcome to Dominic System!"
+if os.path.exists(NOTE_FILE):
+    try:
+        with open(NOTE_FILE, "r", encoding="utf-8") as f:
+            app_note = f.read().strip()
+    except: pass
+
+# Path များကို Load လုပ်ရန်
 tv_paths = {}
 if os.path.exists(PATH_FILE):
     try:
@@ -38,7 +47,7 @@ def get_mediafire_direct(url):
     except:
         return None
 
-# --- NEW: MEDIAFIRE & LINK & PATH HANDLER ---
+# --- HANDLER: Admin Messages ---
 
 async def handle_admin_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
@@ -52,12 +61,20 @@ async def handle_admin_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                    [InlineKeyboardButton(f"Save TV {i}", callback_data=f"save_tv{i}") for i in range(11, 13)]]
         await update.message.reply_text("📁 ဖိုင်ကို ဘယ်နေရာမှာ သိမ်းမလဲ?", reply_markup=InlineKeyboardMarkup(buttons))
     
-    # ၂။ MediaFire Link သို့မဟုတ် File Path ပို့လာရင်
+    # ၂။ စာသား ပို့လာရင် (Link, Path သို့မဟုတ် Note)
     elif update.message.text:
         msg_text = update.message.text
         
+        # Note သတ်မှတ်ခြင်း (ဥပမာ- Note: မင်္ဂလာပါ)
+        if msg_text.startswith("Note:"):
+            global app_note
+            app_note = msg_text.replace("Note:", "").strip()
+            with open(NOTE_FILE, "w", encoding="utf-8") as f:
+                f.write(app_note)
+            await update.message.reply_text(f"✅ App Note ကို ပြောင်းလဲလိုက်ပါပြီ:\n`{app_note}`", parse_mode='Markdown')
+
         # MediaFire Link ဖြစ်ခဲ့လျှင်
-        if "mediafire.com" in msg_text:
+        elif "mediafire.com" in msg_text:
             direct = get_mediafire_direct(msg_text)
             if direct:
                 context.user_data['pending_link'] = direct
@@ -87,14 +104,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Key Gen
     if query.data == 'gen_key':
         new_key = str(uuid.uuid4())[:8].upper()
         name = f"@{query.from_user.username}" if query.from_user.username else f"ID:{query.from_user.id}"
         active_keys[new_key] = {"expiry": time.time() + 10800, "used_by": None, "tg_name": name}
         await query.message.reply_text(f"✅ **Key:** `{new_key}`\n⏳ Valid for 3 Hours", parse_mode='Markdown')
 
-    # Save File/Link Logic
     elif query.data.startswith("save_tv"):
         tv_id = query.data.replace("save_", "")
         mode = context.user_data.get('mode')
@@ -118,7 +133,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await query.edit_message_text(f"❌ Error: {str(e)}")
         context.user_data.clear()
 
-    # Set Path Logic (NEW)
     elif query.data.startswith("setpath_tv"):
         tv_id = query.data.replace("setpath_", "")
         path_val = context.user_data.get('pending_path')
@@ -130,7 +144,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(f"✅ {tv_id.upper()} အတွက် Path သတ်မှတ်ပြီးပါပြီ။\n📍 `{path_val}`", parse_mode='Markdown')
         context.user_data.clear()
 
-    # Delete Logic
     elif query.data.startswith("del_tv"):
         tv_id = query.data.split("_")[1]
         path = os.path.join(DOWNLOAD_DIR, f"{tv_id}.dat")
@@ -140,7 +153,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.edit_message_text("❌ ဖိုင်မရှိပါ။")
 
-    # Block/Unblock
     elif query.data.startswith("blk_") or query.data.startswith("unb_"):
         if query.from_user.id != ADMIN_ID: return
         action, target = query.data.split("_", 1)
@@ -151,7 +163,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             blocked_users.discard(target)
             msg = f"🔓 Unblocked: `{target}`"
-        await query.message.reply_text(msg, parse_mode='Markdown')
+        await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def delete_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
@@ -171,6 +183,10 @@ async def user_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- FLASK API ROUTES ---
 
+@flask_app.route('/get_note')
+def get_note():
+    return app_note
+
 @flask_app.route('/verify/<key_id>/<user_id>')
 def verify(key_id, user_id):
     if user_id in blocked_users: return jsonify({"status": "blocked"})
@@ -182,7 +198,6 @@ def verify(key_id, user_id):
         return jsonify({"status": "success"})
     return jsonify({"status": "invalid"})
 
-# Path ကို App က လှမ်းယူရန် Route (NEW)
 @flask_app.route('/get_path/<tv_id>')
 def get_path(tv_id):
     path = tv_paths.get(tv_id, "/storage/emulated/0/Android/data/com.mobile.legends/files/dragon2017/assets/Document/android/")

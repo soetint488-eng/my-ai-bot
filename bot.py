@@ -1,94 +1,81 @@
-import logging
-import os
+import time
+import uuid
 import threading
-import requests
-from http.server import SimpleHTTPRequestHandler
-from socketserver import TCPServer
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+import os
+from flask import Flask, jsonify
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler
 
 # --- CONFIGURATION ---
+# မောင့်ရဲ့ Bot Token ကို ဒီမှာ ထည့်ထားပါတယ်
 BOT_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
-RAPIDAPI_KEY = "06b1562a59msh39810b847e9d0e2p151fd6jsn3a9d60ae50a9"
-RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
+flask_app = Flask(__name__)
 
-# --- RENDER PORT FIX ---
-logging.basicConfig(level=logging.INFO)
-def run_dummy_server():
-    port = int(os.environ.get("PORT", 8080))
-    with TCPServer(("", port), SimpleHTTPRequestHandler) as httpd:
-        httpd.serve_forever()
+# Key များကို သိမ်းဆည်းရန် (In-memory Storage)
+active_keys = {}
 
-# --- CORE FUNCTION ---
-def check_mlbb_data(user_id, zone_id):
-    url = f"https://{RAPIDAPI_HOST}/mobile-legends/{user_id}/{zone_id}"
-    headers = {"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_HOST}
-    try:
-        response = requests.get(url, headers=headers, timeout=15)
-        return (response.json(), None) if response.status_code == 200 else (None, f"Error: {response.status_code}")
-    except Exception as e:
-        return None, str(e)
-
-# --- COMMAND HANDLERS ---
+# --- TELEGRAM BOT LOGIC ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = (
-        "✨ **DOMINIC MLBB UTILITY**\n\n"
-        "Commands Available:\n"
-        "👉 `/id [ID] [Zone]` - Check Nickname\n"
-        "👉 `/servers` - View Server Regions\n\n"
-        "💡 *Tap any text to copy instantly!*"
+    keyboard = [[InlineKeyboardButton("Create Key 🗝️", callback_data='gen_key')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "✨ **DOMINIC ACCESS SYSTEM**\n\nClick the button to get your 3-hour key.",
+        reply_markup=reply_markup, parse_mode='Markdown'
     )
-    await update.message.reply_text(msg, parse_mode='Markdown')
 
-async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) < 2:
-        await update.message.reply_text("❌ **Format:** `/id [ID] [Zone]`", parse_mode='Markdown')
-        return
-    
-    u_id, z_id = context.args[0], context.args[1]
-    status_msg = await update.message.reply_text("🔍 **Searching...**", parse_mode='Markdown')
-    data, error = check_mlbb_data(u_id, z_id)
-    
-    if data and 'data' in data:
-        nickname = data['data'].get('username', 'Unknown')
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == 'gen_key':
+        # ၈ လုံးပါတဲ့ Key တစ်ခု ထုတ်မယ်
+        new_key = str(uuid.uuid4())[:8].upper()
+        # ၃ နာရီ သက်တမ်း (10800 စက္ကန့်)
+        expiry_time = time.time() + 10800
+        active_keys[new_key] = expiry_time
         
-        # Format with `backticks` for Auto-Copy feature
-        result = (
-            "🎮 **PLAYER FOUND**\n"
+        msg = (
+            "✅ **Key Generated!**\n"
             "━━━━━━━━━━━━━━━\n"
-            "👤 **Name:** `{}`\n"
-            "🆔 **ID:** `{}`\n"
-            "🌐 **Zone:** `{}`\n"
+            "🗝️ Key: `{}`\n"
+            "⏳ Status: **Active for 3 Hours**\n"
             "━━━━━━━━━━━━━━━\n"
-            "✅ **Verified by Dominic**\n"
-            "💡 *Tap the name to copy!*"
-        ).format(nickname, u_id, z_id)
-        
-        await status_msg.edit_text(result, parse_mode='Markdown')
-    else:
-        await status_msg.edit_text("⚠️ **ERROR:** ID not found.", parse_mode='Markdown')
+            "💡 *Tap the key to copy and paste in App.*"
+        ).format(new_key)
+        await query.message.reply_text(msg, parse_mode='Markdown')
 
-async def servers_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    server_list = (
-        "🌐 **SERVER REGIONS**\n"
-        "━━━━━━━━━━━━━━━\n"
-        "🇲🇲 **SEA:** `2xxx, 3xxx, 4xxx, 5xxx, 6xxx`\n"
-        "🇧🇷 **LATAM:** `7xxx`\n"
-        "🇪🇺 **Europe:** `8xxx`\n"
-        "🇺🇸 **NA:** `9xxx`\n"
-        "━━━━━━━━━━━━━━━\n"
-        "💡 *Click numbers to copy.*"
-    )
-    await update.message.reply_text(server_list, parse_mode='Markdown')
+# --- API FOR SKETCHWARE ---
 
-# --- MAIN ---
+# ၁။ Key စစ်ဆေးရန် API
+@flask_app.route('/verify/<key_id>')
+def verify(key_id):
+    now = time.time()
+    if key_id in active_keys:
+        if now < active_keys[key_id]:
+            return jsonify({"status": "success", "msg": "Access Granted"})
+        else:
+            del active_keys[key_id]
+            return jsonify({"status": "expired", "msg": "Key Expired"})
+    return jsonify({"status": "invalid", "msg": "Invalid Key"})
+
+# ၂။ Key ထုတ်ထားသူဦးရေ စစ်ရန် API
+@flask_app.rowte('/count')
+def get_count():
+    return jsonify({"count": len(active_keys)})
+
+# Render အတွက် Port ဖွင့်ပေးခြင်း
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    flask_app.run(host='0.0.0.0', port=port)
+
 if __name__ == '__main__':
-    threading.Thread(target=run_dummy_server, daemon=True).start()
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    # Flask Server ကို Background မှာ Run မယ်
+    threading.Thread(target=run_flask, daemon=True).start()
     
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("id", id_handler))
-    app.add_handler(CommandHandler("servers", servers_handler))
+    # Telegram Bot ကို Run မယ်
+    bot_app = ApplicationBuilder().token(BOT_TOKEN).build()
+    bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(CallbackQueryHandler(button_handler))
     
-    print("Dominic MLBB Bot is Online with Auto-Copy.")
-    app.run_polling(drop_pending_updates=True)
+    print("Bot and API are running...")
+    bot_app.run_polling(drop_pending_updates=True)

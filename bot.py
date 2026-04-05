@@ -7,11 +7,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler
 
 # --- CONFIGURATION ---
-# မောင့်ရဲ့ Bot Token ကို ဒီမှာ ထည့်ထားပါတယ်
 BOT_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
 flask_app = Flask(__name__)
 
-# Key များကို သိမ်းဆည်းရန် (In-memory Storage)
+# Key များကို သိမ်းဆည်းရန်
 active_keys = {}
 
 # --- TELEGRAM BOT LOGIC ---
@@ -28,9 +27,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == 'gen_key':
-        # ၈ လုံးပါတဲ့ Key တစ်ခု ထုတ်မယ်
         new_key = str(uuid.uuid4())[:8].upper()
-        # ၃ နာရီ သက်တမ်း (10800 စက္ကန့်)
         expiry_time = time.time() + 10800
         active_keys[new_key] = expiry_time
         
@@ -46,7 +43,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- API FOR SKETCHWARE ---
 
-# ၁။ Key စစ်ဆေးရန် API
 @flask_app.route('/verify/<key_id>')
 def verify(key_id):
     now = time.time()
@@ -58,21 +54,17 @@ def verify(key_id):
             return jsonify({"status": "expired", "msg": "Key Expired"})
     return jsonify({"status": "invalid", "msg": "Invalid Key"})
 
-# ၂။ Key ထုတ်ထားသူဦးရေ စစ်ရန် API
-@flask_app.rowte('/count')
+# ဒီနေရာမှာ အမှန်ပြင်ထားပါတယ် မောင်
+@flask_app.route('/count')
 def get_count():
     return jsonify({"count": len(active_keys)})
 
-# Render အတွက် Port ဖွင့်ပေးခြင်း
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     flask_app.run(host='0.0.0.0', port=port)
 
 if __name__ == '__main__':
-    # Flask Server ကို Background မှာ Run မယ်
     threading.Thread(target=run_flask, daemon=True).start()
-    
-    # Telegram Bot ကို Run မယ်
     bot_app = ApplicationBuilder().token(BOT_TOKEN).build()
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CallbackQueryHandler(button_handler))

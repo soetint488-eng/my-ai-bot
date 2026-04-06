@@ -183,6 +183,10 @@ async def user_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- FLASK API ROUTES ---
 
+@flask_app.route('/')
+def home():
+    return "DOMINIC SYSTEM IS ONLINE ✅", 200
+
 @flask_app.route('/get_note')
 def get_note():
     return app_note

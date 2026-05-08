@@ -8,24 +8,28 @@ from aiogram.utils import executor
 from PIL import Image, ImageOps, ImageFilter
 from rembg import remove
 
-# ၁။ Web Server (Cron-job.org အတွက် HTTP 200 OK ပြန်ရန်)
+# ၁။ Web Server (Render Port Binding & Cron-job.org Support)
 app = Flask('')
 
 @app.route('/')
 def home():
-    return Response("Bot is running perfectly!", status=200)
+    # Cron-job.org အတွက် HTTP 200 OK ပြန်ပေးခြင်း
+    return Response("Bot is active and running!", status=200)
 
 def run():
-    app.run(host='0.0.0.0', port=8080)
+    # Render ရဲ့ Dynamic Port ကို ဖတ်ခိုင်းခြင်း (Error မတက်စေရန် အရေးကြီးဆုံးအချက်)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run)
+    t.daemon = True # Main thread ပိတ်ရင် တစ်ခါတည်း ပိတ်အောင် လုပ်ခြင်း
     t.start()
 
-# ၂။ Telegram Bot ပိုင်း
+# ၂။ Telegram Bot Logic
 logging.basicConfig(level=logging.INFO)
 
-# ကိုကိုပေးထားတဲ့ Token ကို ဒီမှာ ထည့်လိုက်ပါပြီ
+# ကိုကို့ Token
 API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
@@ -66,6 +70,7 @@ async def process_filter(callback_query: types.CallbackQuery):
         if action == "bw":
             img = ImageOps.grayscale(img)
         elif action == "sepia":
+            # Better Sepia implementation
             img = ImageOps.colorize(ImageOps.grayscale(img), "#704214", "#C0A080")
         elif action == "blur":
             img = img.filter(ImageFilter.GaussianBlur(5))

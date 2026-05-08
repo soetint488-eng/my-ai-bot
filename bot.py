@@ -26,12 +26,15 @@ def run_flask():
 
 # ၂။ Telegram Bot ပိုင်း
 logging.basicConfig(level=logging.INFO)
+
+# Token များ
 API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
+REPLICATE_API_TOKEN = 'r8_AiNNa0YqelPsLQktOiBAcn9BlLyuYfS1P8ZF2'
+
 bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-# State Management for Cropping
 class CropState(StatesGroup):
     waiting_for_area = State()
 
@@ -57,15 +60,10 @@ async def start(message: types.Message):
 async def handle_photo(message: types.Message):
     await message.reply("ဒီပုံကို ဘာလုပ်မလဲ ကိုကို?", reply_markup=get_filter_keyboard())
 
-# --- AI Enhancement Function ---
+# --- AI Enhancement Function (Token အသေထည့်ထားသည်) ---
 async def ai_enhance_photo(photo_url):
-    replicate_token = os.getenv('REPLICATE_API_TOKEN')
-    if not replicate_token:
-        return None, "Error: Replicate Token မရှိသေးပါ။ Render မှာ ထည့်ပေးပါ။"
-    
-    client = replicate.Client(api_token=replicate_token)
+    client = replicate.Client(api_token=REPLICATE_API_TOKEN)
     try:
-        # GFPGAN Model သုံးပြီး ပုံကြည်အောင်လုပ်ခြင်း
         output = client.run(
             "tencentarc/gfpgan:9283608cc6b7be6b65a8e44983db01e11100227496c4c9c40213b1026456f081",
             input={"img": photo_url, "scale": 2}

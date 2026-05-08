@@ -3,3 +3,5 @@ Pillow
 rembg
 onnxruntime
 flask
+replicate
+requests

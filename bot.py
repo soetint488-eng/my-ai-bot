@@ -9,10 +9,10 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
-# ၁။ Web Server
+# ၁။ Web Server (Render အတွက်)
 app = Flask('')
 @app.route('/')
-def home(): return Response("Bot System is Online!", status=200)
+def home(): return Response("Multi-Bot Builder is Online!", status=200)
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -20,21 +20,18 @@ def run_flask():
 
 # ၂။ Database Setup
 def init_db():
-    conn = sqlite3.connect('bot_pro.db')
+    conn = sqlite3.connect('bot_builder.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users 
-                 (user_id INTEGER PRIMARY KEY, points INTEGER DEFAULT 0)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS settings 
-                 (key TEXT PRIMARY KEY, value TEXT)''')
-    # Default Settings
+    c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, points INTEGER DEFAULT 0)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)''')
     c.execute("INSERT OR IGNORE INTO settings VALUES ('status', 'on')")
-    c.execute("INSERT OR IGNORE INTO settings VALUES ('admin_id', '5123456789')") # အစပိုင်းတွင် မိမိ ID ပြောင်းပါ
+    c.execute("INSERT OR IGNORE INTO settings VALUES ('admin_id', '5123456789')") # ကိုယ့် ID ပြောင်းပါ
     conn.commit()
     conn.close()
 
 init_db()
 
-# ၃။ Bot Setup
+# ၃။ Master Bot Setup
 logging.basicConfig(level=logging.INFO)
 API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
 
@@ -42,137 +39,93 @@ bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-class AdminStates(StatesGroup):
-    waiting_for_new_admin = State()
-    waiting_for_broadcast = State()
+class BuildStates(StatesGroup):
+    waiting_for_token = State()
+    waiting_for_text = State()
+    waiting_for_btn_name = State()
+    waiting_for_btn_link = State()
 
-# Functions to check status and admin
-def get_setting(key):
-    conn = sqlite3.connect('bot_pro.db')
-    val = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
-    conn.close()
-    return val[0] if val else None
-
-def set_setting(key, value):
-    conn = sqlite3.connect('bot_pro.db')
-    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
-    conn.commit()
-    conn.close()
-
-# Keyboards
-def main_menu(user_id):
+def get_main_menu(user_id):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     kb.add("➕ Build Bot", "📊 My Stats")
     kb.add("🔗 Referral Link")
-    if str(user_id) == get_setting('admin_id'):
+    # Database ထဲက Admin ID နဲ့ တိုက်စစ်မယ်
+    conn = sqlite3.connect('bot_builder.db')
+    admin_id = conn.execute("SELECT value FROM settings WHERE key='admin_id'").fetchone()[0]
+    conn.close()
+    if str(user_id) == admin_id:
         kb.add("👮 Admin Panel")
     return kb
 
-def admin_menu():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    status = "🔴 Stop Bot" if get_setting('status') == 'on' else "🟢 Start Bot"
-    kb.add(status, "📢 Broadcast")
-    kb.add("🔑 Change Admin ID", "📈 Total Users")
-    kb.add("🔙 Back")
-    return kb
-
-# --- Middleware-like check for Maintenance ---
-async def is_maintenance(message: types.Message):
-    if get_setting('status') == 'off' and str(message.from_user.id) != get_setting('admin_id'):
-        await message.reply("⚠️ Bot ကို ခေတ္တရပ်နားထားပါသည်။ ခဏအကြာမှ ပြန်လည်ကြိုးစားပါ။")
-        return True
-    return False
-
+# --- Start Command ---
 @dp.message_handler(commands=['start'], state="*")
 async def start(message: types.Message, state: FSMContext):
     await state.finish()
-    if await is_maintenance(message): return
-
     user_id = message.from_user.id
-    conn = sqlite3.connect('bot_pro.db')
+    
+    conn = sqlite3.connect('bot_builder.db')
     conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
     conn.commit()
     conn.close()
 
-    await message.reply("မင်္ဂလာပါ။ အလိုရှိရာကို ရွေးချယ်ပေးပါ။", reply_markup=main_menu(user_id))
+    await message.reply("မင်္ဂလာပါ။ Bot Builder မှ ကြိုဆိုပါတယ်။ Token ပေးပြီး Bot တည်ဆောက်နိုင်ပါပြီ။", reply_markup=get_main_menu(user_id))
 
-# --- Admin Panel Logic ---
-@dp.message_handler(lambda m: m.text == "👮 Admin Panel", state="*")
-async def admin_start(message: types.Message):
-    if str(message.from_user.id) != get_setting('admin_id'): return
-    await message.reply("Admin Control Panel ရောက်ရှိနေပါသည်။", reply_markup=admin_menu())
+# --- Build Bot Logic ---
+@dp.message_handler(lambda m: m.text == "➕ Build Bot", state="*")
+async def ask_token(message: types.Message):
+    await message.reply("ဟုတ်ကဲ့။ Bot Father ဆီကရလာတဲ့ **Bot Token** ကို ပေးပို့ပေးပါ။")
+    await BuildStates.waiting_for_token.set()
 
-@dp.message_handler(lambda m: m.text in ["🔴 Stop Bot", "🟢 Start Bot"], state="*")
-async def toggle_status(message: types.Message):
-    if str(message.from_user.id) != get_setting('admin_id'): return
-    new_status = 'off' if get_setting('status') == 'on' else 'on'
-    set_setting('status', new_status)
-    msg = "Bot ကို ရပ်တန့်လိုက်ပါပြီ ❌" if new_status == 'off' else "Bot ကို ပြန်လည်ဖွင့်လှစ်လိုက်ပါပြီ ✅"
-    await message.reply(msg, reply_markup=admin_menu())
+# Token ပေးရင် ဒီနေရာကနေ အကြောင်းပြန်ပါမယ်
+@dp.message_handler(state=BuildStates.waiting_for_token)
+async def check_token(message: types.Message, state: FSMContext):
+    token = message.text.strip()
+    await message.reply("Token ကို စစ်ဆေးနေပါတယ်... ခဏစောင့်ပါ။")
+    
+    try:
+        temp_bot = Bot(token=token)
+        me = await temp_bot.get_me()
+        await temp_bot.close()
+        
+        await state.update_data(target_token=token, buttons=[])
+        await message.reply(f"✅ Bot ချိတ်ဆက်မှု အောင်မြင်သည်!\n🤖 Bot: @{me.username}\n\n/start မှာပြမည့် စာသားကို ပို့ပေးပါ။")
+        await BuildStates.waiting_for_text.set()
+        
+    except Exception as e:
+        await message.reply("❌ Token မှားနေပါတယ်။ Bot Father ဆီက Token အမှန်ကို ပြန်ကူးပြီး ပို့ပေးပါ။")
 
-@dp.message_handler(lambda m: m.text == "🔑 Change Admin ID")
-async def change_admin_prompt(message: types.Message):
-    if str(message.from_user.id) != get_setting('admin_id'): return
-    await message.reply("Admin အသစ်ဖြစ်မည့်သူ၏ Telegram ID ကို ပို့ပေးပါ။")
-    await AdminStates.waiting_for_new_admin.set()
+# စာသား လက်ခံခြင်း
+@dp.message_handler(state=BuildStates.waiting_for_text)
+async def get_text(message: types.Message, state: FSMContext):
+    await state.update_data(start_text=message.text)
+    await message.reply("ခလုတ်အမည် (Button Name) ကို ပို့ပေးပါ။ (မရှိလျှင် /done ဟု ပို့ပါ)")
+    await BuildStates.waiting_for_btn_name.set()
 
-@dp.message_handler(state=AdminStates.waiting_for_new_admin)
-async def process_new_admin(message: types.Message, state: FSMContext):
-    if message.text.isdigit():
-        set_setting('admin_id', message.text)
-        await message.reply(f"✅ Admin ID ကို {message.text} သို့ ပြောင်းလဲလိုက်ပါပြီ။", reply_markup=main_menu(message.from_user.id))
+# ခလုတ်အမည် လက်ခံခြင်း
+@dp.message_handler(state=BuildStates.waiting_for_btn_name)
+async def get_btn_name(message: types.Message, state: FSMContext):
+    if message.text == "/done":
+        data = await state.get_data()
+        await message.reply("🎉 အားလုံးပြီးပါပြီ။ Bot Configuration အောင်မြင်သွားပါပြီ။", reply_markup=get_main_menu(message.from_user.id))
         await state.finish()
-    else:
-        await message.reply("❌ ဂဏန်းသက်သက်သာ ပို့ပေးပါ။")
-
-@dp.message_handler(lambda m: m.text == "📈 Total Users")
-async def total_users(message: types.Message):
-    if str(message.from_user.id) != get_setting('admin_id'): return
-    conn = sqlite3.connect('bot_pro.db')
-    count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    conn.close()
-    await message.reply(f"📊 စုစုပေါင်းအသုံးပြုသူ: {count} ယောက်")
-
-@dp.message_handler(lambda m: m.text == "📢 Broadcast")
-async def broad_prompt(message: types.Message):
-    if str(message.from_user.id) != get_setting('admin_id'): return
-    await message.reply("User အားလုံးဆီ ပို့မည့်စာသားကို ပို့ပေးပါ။")
-    await AdminStates.waiting_for_broadcast.set()
-
-@dp.message_handler(state=AdminStates.waiting_for_broadcast)
-async def perform_broadcast(message: types.Message, state: FSMContext):
-    conn = sqlite3.connect('bot_pro.db')
-    users = conn.execute("SELECT user_id FROM users").fetchall()
-    conn.close()
+        return
     
-    count = 0
-    for user in users:
-        try:
-            await bot.send_message(user[0], message.text)
-            count += 1
-            await asyncio.sleep(0.05) # Rate limit ရှောင်ရန်
-        except: pass
+    await state.update_data(current_btn=message.text)
+    await message.reply(f"'{message.text}' အတွက် Link ကို ပို့ပေးပါ။")
+    await BuildStates.waiting_for_btn_link.set()
+
+# ခလုတ်လင့်ခ် လက်ခံခြင်း
+@dp.message_handler(state=BuildStates.waiting_for_btn_link)
+async def get_btn_link(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    btns = data.get('buttons', [])
+    btns.append({'name': data['current_btn'], 'link': message.text})
     
-    await message.reply(f"✅ လူပေါင်း {count} ယောက်ထံ ပေးပို့ပြီးပါပြီ။", reply_markup=admin_menu())
-    await state.finish()
+    await state.update_data(buttons=btns)
+    await message.reply("နောက်ထပ် ခလုတ်အမည် ထပ်ပို့ပါ။ (မရှိတော့လျှင် /done ကို နှိပ်ပါ)")
+    await BuildStates.waiting_for_btn_name.set()
 
-@dp.message_handler(lambda m: m.text == "🔙 Back", state="*")
-async def go_back(message: types.Message, state: FSMContext):
-    await state.finish()
-    await message.reply("ပင်မ Menu သို့ ပြန်ရောက်ပါပြီ။", reply_markup=main_menu(message.from_user.id))
-
-# --- ပင်မ Menu Features များ ---
-@dp.message_handler(lambda m: m.text == "📊 My Stats")
-async def my_stats(message: types.Message):
-    if await is_maintenance(message): return
-    await message.reply(f"👤 အမည်: {message.from_user.full_name}\n🆔 ID: {message.from_user.id}")
-
-@dp.message_handler(lambda m: m.text == "➕ Build Bot")
-async def build_bot(message: types.Message):
-    if await is_maintenance(message): return
-    await message.reply("တည်ဆောက်လိုသော Bot Token ကို ပို့ပေးပါ။")
-
-# Main Runner
+# --- Main Runner ---
 async def main():
     Thread(target=run_flask, daemon=True).start()
     await dp.start_polling()

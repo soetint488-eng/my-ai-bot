@@ -10,7 +10,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # --- 1. Web Server for Cron-job ---
 app = Flask('')
 @app.route('/')
-def home(): return "200 OK - Dominic Studio is Active!"
+def home(): return "200 OK - Power Bot is Active!"
 
 def run_web(): app.run(host='0.0.0.0', port=8080)
 def keep_alive(): Thread(target=run_web).start()
@@ -18,107 +18,96 @@ def keep_alive(): Thread(target=run_web).start()
 # --- 2. API Setup ---
 API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
 REMOVE_BG_API_KEY = 'NJqyHZ2Du9oAhnNiiTazFPpo'
-PIXO_API_KEY = '3kgr1xywr5y0'
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# --- 3. UI Keyboards ---
+# --- 3. Premium UI Keyboards ---
 
-def get_main_keyboard(f_id):
+def get_main_menu(f_id):
     kb = InlineKeyboardMarkup(row_width=2)
-    # file_id ကို callback ထဲ တန်းထည့်လိုက်တာက Error ကို အပြီးတိုင် ရှင်းပေးပါတယ်
     kb.add(
-        InlineKeyboardButton("🖼 Background", callback_data=f"m_bg|{f_id}"),
-        InlineKeyboardButton("🎭 FX Filters", callback_data=f"m_fx|{f_id}"),
-        InlineKeyboardButton("⚙️ Adjust", callback_data=f"m_ad|{f_id}"),
-        InlineKeyboardButton("💎 PNG", callback_data=f"bg_transparent|{f_id}")
+        InlineKeyboardButton("✂️ Remove BG", callback_data=f"opt_trans|{f_id}"),
+        InlineKeyboardButton("🎨 Solid Colors", callback_data=f"nav_colors|{f_id}"),
+        InlineKeyboardButton("🖼 BG Patterns", callback_data=f"nav_patterns|{f_id}"),
+        InlineKeyboardButton("🌑 Add Shadow", callback_data=f"opt_shadow|{f_id}"),
+        InlineKeyboardButton("💎 Full HD Mode", callback_data=f"opt_hd|{f_id}"),
+        InlineKeyboardButton("❌ Close", callback_data="cancel")
     )
-    kb.row(InlineKeyboardButton("❌ Close", callback_data="cancel"))
+    return kb
+
+def get_color_menu(f_id):
+    kb = InlineKeyboardMarkup(row_width=3)
+    colors = {"🔵 Blue": "blue", "⚪ White": "white", "🔴 Red": "red", 
+              "🟢 Green": "green", "🟡 Yellow": "yellow", "🟣 Pink": "pink"}
+    for label, val in colors.items():
+        kb.insert(InlineKeyboardButton(label, callback_data=f"clr_{val}|{f_id}"))
+    kb.row(InlineKeyboardButton("🔙 Back", callback_data=f"back|{f_id}"))
     return kb
 
 # --- 4. Handlers ---
 
 @dp.message_handler(commands=['start'])
 async def start(m: types.Message):
-    await m.reply("👋 **Dominic Pro Studio AI** မှ ကြိုဆိုပါတယ် ကိုကို!\n\nဓာတ်ပုံတစ်ပုံ ပို့ပေးလိုက်ပါဗျ။")
+    await m.reply("🔥 **Dominic Power BG Remover**\n\nပြုပြင်လိုသည့် ဓာတ်ပုံကို ပို့ပေးလိုက်ပါ ကိုကို!")
 
 @dp.message_handler(content_types=['photo'])
 async def photo_in(m: types.Message):
-    f_id = m.photo[-1].file_id # ပုံရဲ့ ID ကို ယူထားမယ်
-    await m.reply(
-        "📸 **Image Received!**\nပြုပြင်လိုသည့် Tool ကို ရွေးချယ်ပါ ကိုကို-",
-        reply_markup=get_main_keyboard(f_id),
-        parse_mode="Markdown"
-    )
+    f_id = m.photo[-1].file_id
+    await m.reply("✨ **Image Received!**\nအသုံးပြုလိုသည့် Professional Tool ကို ရွေးပါ-", 
+                   reply_markup=get_main_menu(f_id))
 
 @dp.callback_query_handler(lambda c: True)
 async def callbacks(cb: types.CallbackQuery):
-    data_parts = cb.data.split("|")
-    cmd = data_parts[0]
-    f_id = data_parts[1] if len(data_parts) > 1 else None
-    
-    cid = cb.message.chat.id
-    mid = cb.message.message_id
+    d = cb.data.split("|")
+    cmd = d[0]
+    f_id = d[1] if len(d) > 1 else None
+    cid, mid = cb.message.chat.id, cb.message.message_id
 
-    # UI Navigations
-    if cmd == "m_bg":
-        kb = InlineKeyboardMarkup(row_width=3)
-        colors = ["Blue", "White", "Red", "Green", "Yellow", "Pink"]
-        for c in colors: kb.insert(InlineKeyboardButton(c, callback_data=f"bg_{c.lower()}|{f_id}"))
-        kb.add(InlineKeyboardButton("🔙 Back", callback_data=f"back|{f_id}"))
-        await bot.edit_message_text("🖼 **Choose Background Color**", cid, mid, reply_markup=kb, parse_mode="Markdown")
+    # UI Navigation
+    if cmd == "nav_colors":
+        await bot.edit_message_text("🌈 **Select Background Color**", cid, mid, reply_markup=get_color_menu(f_id))
         return
-
-    elif cmd == "m_fx":
-        kb = InlineKeyboardMarkup(row_width=3)
-        fxs = {"Vintage": "vintage", "Gray": "grayscale", "Sepia": "sepia", "Techni": "technicolor", "Invert": "invert"}
-        for k, v in fxs.items(): kb.insert(InlineKeyboardButton(k, callback_data=f"px_{v}|{f_id}"))
-        kb.add(InlineKeyboardButton("🔙 Back", callback_data=f"back|{f_id}"))
-        await bot.edit_message_text("🎨 **Special FX Filters**", cid, mid, reply_markup=kb, parse_mode="Markdown")
-        return
-
     elif cmd == "back":
-        await bot.edit_message_text("✨ **Main Menu**", cid, mid, reply_markup=get_main_keyboard(f_id))
+        await bot.edit_message_text("✨ **Main Menu**", cid, mid, reply_markup=get_main_menu(f_id))
         return
-
     elif cmd == "cancel":
         await bot.delete_message(cid, mid)
         return
 
-    # --- API Processing ---
+    # Processing Logic
     if f_id:
-        await bot.edit_message_text("⚙️ **Dominic AI is working...**", cid, mid, parse_mode="Markdown")
+        await bot.edit_message_text("⚙️ **Dominic AI အလုပ်လုပ်နေပါပြီ...**", cid, mid)
         try:
             file = await bot.get_file(f_id)
             p_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file.file_path}"
-            
-            # Pixo (FX Filters)
-            if cmd.startswith("px_"):
-                action = cmd.split("_")[1]
-                res = requests.get("https://api.pixoeditor.com/v1/transform", 
-                                   params={'apikey': PIXO_API_KEY, 'image': p_url, 'filter': action})
-                cap = f"🎨 FX: {action.capitalize()}"
+            headers = {'X-API-Key': REMOVE_BG_API_KEY}
+            params = {'image_url': p_url, 'size': 'auto'}
 
-            # Background (Remove.bg)
-            elif cmd.startswith("bg_"):
+            # Feature logic based on command
+            if cmd == "opt_trans": cap = "✅ Background Removed"
+            elif cmd == "opt_shadow": 
+                params['add_shadow'] = 'true'
+                cap = "✅ Shadow Added"
+            elif cmd == "opt_hd":
+                params['size'] = 'full'
+                cap = "💎 Full HD Quality"
+            elif cmd.startswith("clr_"):
                 color = cmd.split("_")[1]
-                rb_params = {'image_url': p_url, 'size': 'auto'}
-                if color != "transparent": rb_params['bg_color'] = color
-                res = requests.post('https://api.remove.bg/v1.0/removebg', 
-                                    data=rb_params, headers={'X-API-Key': REMOVE_BG_API_KEY})
-                cap = f"🖼 BG: {color.capitalize()}"
+                params['bg_color'] = color
+                cap = f"✅ {color.capitalize()} Background"
 
+            res = requests.post('https://api.remove.bg/v1.0/removebg', data=params, headers=headers)
+            
             if res.status_code == 200:
                 out = io.BytesIO(res.content)
-                out.name = "dominic_studio.png"
-                await bot.send_document(cid, document=out, caption=f"✅ {cap}\n_Dominic Pro Studio_", parse_mode="Markdown")
+                out.name = "dominic_power_edit.png"
+                await bot.send_document(cid, document=out, caption=f"{cap}\n_Dominic AI Studio_")
                 await bot.delete_message(cid, mid)
             else:
-                await bot.send_message(cid, "❌ API Credit ကုန်နေပါပြီ ကိုကို။")
-        except Exception as e:
-            logging.error(e)
+                await bot.send_message(cid, "❌ API Credit မလုံလောက်ပါ သို့မဟုတ် Key မှားနေပါတယ်။")
+        except:
             await bot.send_message(cid, "❌ Error ဖြစ်သွားပါတယ်။ ပုံကို အသစ်ပြန်ပို့ပေးပါ။")
 
     await bot.answer_callback_query(cb.id)

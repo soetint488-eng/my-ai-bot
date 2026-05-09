@@ -1,119 +1,91 @@
-import os
-import sqlite3
 import logging
-import asyncio
-import json
-from flask import Flask, Response
-from threading import Thread
+import requests
+import io
 from aiogram import Bot, Dispatcher, types
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.dispatcher import FSMContext
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.utils import executor
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# ၁။ Web Server
-app = Flask('')
-@app.route('/')
-def home(): return Response("Bot System Online", status=200)
+# ၁။ Setup
+API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
+REMOVE_BG_API_KEY = 'NJqyHZ2Du9oAhnNiiTazFPpo' # ကိုကိုပေးတဲ့ Key ထည့်ထားပါတယ်
 
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+logging.basicConfig(level=logging.INFO)
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
 
-# ၂။ Master Bot Setup
-MASTER_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
-bot = Bot(token=MASTER_TOKEN)
-storage = MemoryStorage()
-dp = Dispatcher(bot, storage=storage)
+# ခလုတ်များ တည်ဆောက်ခြင်း
+def get_bg_keyboard():
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("✂️ ဖြတ်ထုတ်ရုံပဲ", callback_data="bg_transparent"),
+        InlineKeyboardButton("🔵 အပြာရောင်ပြောင်း", callback_data="bg_blue"),
+        InlineKeyboardButton("⚪ အဖြူရောင်ပြောင်း", callback_data="bg_white")
+    )
+    return kb
 
-class BuildStates(StatesGroup):
-    waiting_for_token = State()
-    waiting_for_text = State()
-    waiting_for_btn_name = State()
-    waiting_for_btn_link = State()
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    await message.reply(
+        "👤 **AI Background Remover မှ ကြိုဆိုပါတယ်!**\n\n"
+        "ပြုပြင်ချင်တဲ့ လူပုံ (သို့) ပစ္စည်းပုံကို ပို့ပေးလိုက်ပါဗျ။",
+        parse_mode="Markdown"
+    )
 
-# --- Target Bot ကို အသက်သွင်းမည့် Function ---
-async def activate_target_bot(token, start_text, buttons):
+@dp.message_handler(content_types=['photo'])
+async def handle_photo(message: types.Message):
+    await message.reply("ပုံရပါပြီ။ ဘာလုပ်ချင်လဲ ရွေးပေးပါဗျ-", reply_markup=get_bg_keyboard())
+
+@dp.callback_query_handler(lambda c: c.data.startswith('bg_'))
+async def process_background(callback_query: types.CallbackQuery):
+    action = callback_query.data
+    message = callback_query.message
+    
+    # User ပို့ခဲ့တဲ့ပုံကို ပြန်ယူမယ်
+    photo = await message.reply_to_message.photo[-1].get_file()
+    photo_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{photo.file_path}"
+    
+    await bot.edit_message_text("⏳ Processing... ခဏစောင့်ပေးပါဗျ။", 
+                               chat_id=callback_query.message.chat.id, 
+                               message_id=callback_query.message.message_id)
+
+    # API Parameters သတ်မှတ်ခြင်း
+    data = {
+        'image_url': photo_url,
+        'size': 'auto'
+    }
+    
+    if action == "bg_blue":
+        data['bg_color'] = 'blue'
+    elif action == "bg_white":
+        data['bg_color'] = 'white'
+    # bg_transparent ဆိုရင် ဘာမှထပ်ထည့်စရာမလိုပါ (အကြည်ရမှာမို့လို့)
+
     try:
-        t_bot = Bot(token=token)
-        # အရင်ရှိနေတဲ့ Webhook သို့မဟုတ် Polling တွေကို ရှင်းထုတ်ပစ်ရန်
-        await t_bot.delete_webhook(drop_pending_updates=True)
-        
-        # Dispatcher အသစ်တစ်ခုနဲ့ Polling စတင်ရန်
-        t_dp = Dispatcher(t_bot)
+        response = requests.post(
+            'https://api.remove.bg/v1.0/removebg',
+            data=data,
+            headers={'X-API-Key': REMOVE_BG_API_KEY},
+        )
 
-        @t_dp.message_handler(commands=['start'])
-        async def send_welcome(message: types.Message):
-            kb = types.InlineKeyboardMarkup(row_width=1)
-            for b in buttons:
-                kb.add(types.InlineKeyboardButton(text=b['name'], url=b['link']))
-            await message.reply(start_text, reply_markup=kb)
-
-        # Polling ကို Background မှာ Run ခိုင်းခြင်း
-        asyncio.create_task(t_dp.start_polling())
-        return True
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
-
-# --- Master Bot UI ---
-@dp.message_handler(commands=['start'], state="*")
-async def start_cmd(message: types.Message, state: FSMContext):
-    await state.finish()
-    await message.reply("မင်္ဂလာပါ။ Bot အသစ်ပြုလုပ်ရန် ခလုတ်ကိုနှိပ်ပါ။", 
-                       reply_markup=types.ReplyKeyboardMarkup(resize_keyboard=True).add("➕ Build Bot"))
-
-@dp.message_handler(lambda m: m.text == "➕ Build Bot", state="*")
-async def ask_token(message: types.Message):
-    await message.reply("အသုံးပြုမည့် Bot Token ကို ပေးပို့ပါ။")
-    await BuildStates.waiting_for_token.set()
-
-@dp.message_handler(state=BuildStates.waiting_for_token)
-async def get_token(message: types.Message, state: FSMContext):
-    token = message.text.strip()
-    try:
-        tmp = Bot(token=token)
-        me = await tmp.get_me()
-        await tmp.close()
-        await state.update_data(target_token=token, buttons=[])
-        await message.reply(f"🤖 Bot: @{me.username}\n\n/start မှာပြမည့်စာကို ပို့ပေးပါ။")
-        await BuildStates.next()
-    except:
-        await message.reply("❌ Token မှားနေပါသည်။")
-
-@dp.message_handler(state=BuildStates.waiting_for_text)
-async def get_text(message: types.Message, state: FSMContext):
-    await state.update_data(start_text=message.text)
-    await message.reply("ခလုတ်အမည် ပို့ပါ။ (မရှိလျှင် /done)")
-    await BuildStates.next()
-
-@dp.message_handler(state=BuildStates.waiting_for_btn_name)
-async def get_btn_name(message: types.Message, state: FSMContext):
-    if message.text == "/done":
-        data = await state.get_data()
-        success = await activate_target_bot(data['target_token'], data['start_text'], data['buttons'])
-        if success:
-            await message.reply("🎉 အောင်မြင်ပါပြီ။ သင့် Bot ကို စမ်းသပ်နိုင်ပါပြီ။")
+        if response.status_code == requests.codes.ok:
+            output_io = io.BytesIO(response.content)
+            output_io.name = 'processed_image.png'
+            
+            await bot.send_document(
+                callback_query.from_user.id, 
+                document=output_io, 
+                caption="✅ အောင်မြင်စွာ ပြုပြင်ပြီးပါပြီ!"
+            )
+            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
         else:
-            await message.reply("❌ တစ်စုံတစ်ခု မှားယွင်းနေပါသည်။")
-        await state.finish()
-        return
-    await state.update_data(curr_name=message.text)
-    await message.reply(f"'{message.text}' အတွက် Link ပို့ပါ။")
-    await BuildStates.next()
+            error_msg = response.json().get('errors', [{}])[0].get('title', 'API Error')
+            await bot.send_message(callback_query.from_user.id, f"❌ Error: {error_msg}")
 
-@dp.message_handler(state=BuildStates.waiting_for_btn_link)
-async def get_btn_link(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    btns = data.get('buttons', [])
-    btns.append({'name': data['curr_name'], 'link': message.text})
-    await state.update_data(buttons=btns)
-    await message.reply("နောက်ထပ် ခလုတ်အမည်ပို့ပါ။ သို့မဟုတ် /done", 
-                       reply_markup=types.ReplyKeyboardMarkup(resize_keyboard=True).add("/done"))
-    await BuildStates.waiting_for_btn_name.set()
+    except Exception as e:
+        logging.error(e)
+        await bot.send_message(callback_query.from_user.id, "❌ တစ်ခုခုမှားယွင်းနေပါတယ်။ ခဏနေမှ ပြန်စမ်းကြည့်ပါဗျ။")
 
-async def main():
-    Thread(target=run_flask, daemon=True).start()
-    await dp.start_polling()
+    await bot.answer_callback_query(callback_query.id)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    executor.start_polling(dp, skip_updates=True)

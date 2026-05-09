@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import logging
 import asyncio
 from flask import Flask, Response
@@ -7,18 +8,33 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from gtts import gTTS # အသံပြောင်းဖို့အတွက်
 
 # ၁။ Web Server
 app = Flask('')
 @app.route('/')
-def home(): return Response("Super Bot Manager is Online!", status=200)
+def home(): return Response("Bot System is Online!", status=200)
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# ၂။ Bot Setup
+# ၂။ Database Setup
+def init_db():
+    conn = sqlite3.connect('bot_pro.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users 
+                 (user_id INTEGER PRIMARY KEY, points INTEGER DEFAULT 0)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS settings 
+                 (key TEXT PRIMARY KEY, value TEXT)''')
+    # Default Settings
+    c.execute("INSERT OR IGNORE INTO settings VALUES ('status', 'on')")
+    c.execute("INSERT OR IGNORE INTO settings VALUES ('admin_id', '5123456789')") # အစပိုင်းတွင် မိမိ ID ပြောင်းပါ
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# ၃။ Bot Setup
 logging.basicConfig(level=logging.INFO)
 API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
 
@@ -26,94 +42,137 @@ bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-# States များ
-class BotPro(StatesGroup):
-    waiting_for_username = State()
-    main_menu = State()
-    making_buttons = State()
-    making_tts = State()
-    broadcasting = State()
+class AdminStates(StatesGroup):
+    waiting_for_new_admin = State()
+    waiting_for_broadcast = State()
 
-# Keyboard များ
-def main_keyboard():
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("🔗 Create Buttons", "🎙 Text to Voice")
-    keyboard.add("📢 Broadcast", "🆔 My ID")
-    keyboard.add("⚙️ Settings", "❌ Reset")
-    return keyboard
+# Functions to check status and admin
+def get_setting(key):
+    conn = sqlite3.connect('bot_pro.db')
+    val = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    conn.close()
+    return val[0] if val else None
+
+def set_setting(key, value):
+    conn = sqlite3.connect('bot_pro.db')
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    conn.commit()
+    conn.close()
+
+# Keyboards
+def main_menu(user_id):
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    kb.add("➕ Build Bot", "📊 My Stats")
+    kb.add("🔗 Referral Link")
+    if str(user_id) == get_setting('admin_id'):
+        kb.add("👮 Admin Panel")
+    return kb
+
+def admin_menu():
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    status = "🔴 Stop Bot" if get_setting('status') == 'on' else "🟢 Start Bot"
+    kb.add(status, "📢 Broadcast")
+    kb.add("🔑 Change Admin ID", "📈 Total Users")
+    kb.add("🔙 Back")
+    return kb
+
+# --- Middleware-like check for Maintenance ---
+async def is_maintenance(message: types.Message):
+    if get_setting('status') == 'off' and str(message.from_user.id) != get_setting('admin_id'):
+        await message.reply("⚠️ Bot ကို ခေတ္တရပ်နားထားပါသည်။ ခဏအကြာမှ ပြန်လည်ကြိုးစားပါ။")
+        return True
+    return False
 
 @dp.message_handler(commands=['start'], state="*")
 async def start(message: types.Message, state: FSMContext):
     await state.finish()
-    await message.reply("မင်္ဂလာပါ ကိုကို! \nBot Manager ကို သုံးဖို့ ကိုကို့ Bot ရဲ့ **Username** (@botname) ကို အရင်ပို့ပေးပါဗျ။")
-    await BotPro.waiting_for_username.set()
+    if await is_maintenance(message): return
 
-@dp.message_handler(state=BotPro.waiting_for_username)
-async def set_username(message: types.Message, state: FSMContext):
-    username = message.text if message.text.startswith('@') else '@' + message.text
-    await state.update_data(bot_username=username)
-    await message.reply(f"ဟုတ်ကဲ့ {username} အတွက် အသင့်ဖြစ်ပါပြီ! \nအောက်က Menu ကနေ စိတ်ကြိုက် လုပ်လို့ရပါပြီ ကိုကို။", reply_markup=main_keyboard())
-    await BotPro.main_menu.set()
+    user_id = message.from_user.id
+    conn = sqlite3.connect('bot_pro.db')
+    conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
+    conn.commit()
+    conn.close()
 
-# --- Feature Handlers ---
+    await message.reply("မင်္ဂလာပါ။ အလိုရှိရာကို ရွေးချယ်ပေးပါ။", reply_markup=main_menu(user_id))
 
-@dp.message_handler(state=BotPro.main_menu)
-async def handle_menu(message: types.Message, state: FSMContext):
-    choice = message.text
+# --- Admin Panel Logic ---
+@dp.message_handler(lambda m: m.text == "👮 Admin Panel", state="*")
+async def admin_start(message: types.Message):
+    if str(message.from_user.id) != get_setting('admin_id'): return
+    await message.reply("Admin Control Panel ရောက်ရှိနေပါသည်။", reply_markup=admin_menu())
 
-    if choice == "🔗 Create Buttons":
-        await message.reply("စာသားနဲ့ Button လင့်ခ်တွေကို ပို့ပေးပါ။ \n\nပုံစံ: \nစာသား | ခလုတ်အမည် | လင့်ခ်")
-        await BotPro.making_buttons.set()
+@dp.message_handler(lambda m: m.text in ["🔴 Stop Bot", "🟢 Start Bot"], state="*")
+async def toggle_status(message: types.Message):
+    if str(message.from_user.id) != get_setting('admin_id'): return
+    new_status = 'off' if get_setting('status') == 'on' else 'on'
+    set_setting('status', new_status)
+    msg = "Bot ကို ရပ်တန့်လိုက်ပါပြီ ❌" if new_status == 'off' else "Bot ကို ပြန်လည်ဖွင့်လှစ်လိုက်ပါပြီ ✅"
+    await message.reply(msg, reply_markup=admin_menu())
 
-    elif choice == "🎙 Text to Voice":
-        await message.reply("အသံပြောင်းချင်တဲ့ စာသားကို ပို့ပေးပါ ကိုကို။")
-        await BotPro.making_tts.set()
+@dp.message_handler(lambda m: m.text == "🔑 Change Admin ID")
+async def change_admin_prompt(message: types.Message):
+    if str(message.from_user.id) != get_setting('admin_id'): return
+    await message.reply("Admin အသစ်ဖြစ်မည့်သူ၏ Telegram ID ကို ပို့ပေးပါ။")
+    await AdminStates.waiting_for_new_admin.set()
 
-    elif choice == "🆔 My ID":
-        await message.reply(f"ကိုကို့ရဲ့ ID က: `{message.from_user.id}` \nChat ID က: `{message.chat.id}`", parse_mode="Markdown")
-
-    elif choice == "📢 Broadcast":
-        await message.reply("User အားလုံးဆီ ပို့ချင်တဲ့စာကို ပို့ပေးပါ။")
-        await BotPro.broadcasting.set()
-
-    elif choice == "❌ Reset":
+@dp.message_handler(state=AdminStates.waiting_for_new_admin)
+async def process_new_admin(message: types.Message, state: FSMContext):
+    if message.text.isdigit():
+        set_setting('admin_id', message.text)
+        await message.reply(f"✅ Admin ID ကို {message.text} သို့ ပြောင်းလဲလိုက်ပါပြီ။", reply_markup=main_menu(message.from_user.id))
         await state.finish()
-        await message.reply("အကုန်လုံးကို ဖျက်လိုက်ပါပြီ။ /start ပြန်နှိပ်ပါ ကိုကို။", reply_markup=types.ReplyKeyboardRemove())
+    else:
+        await message.reply("❌ ဂဏန်းသက်သက်သာ ပို့ပေးပါ။")
 
-# --- Button Maker Logic ---
-@dp.message_handler(state=BotPro.making_buttons)
-async def process_buttons(message: types.Message, state: FSMContext):
-    try:
-        parts = message.text.split('|')
-        text = parts[0].strip()
-        btn_name = parts[1].strip()
-        btn_link = parts[2].strip()
+@dp.message_handler(lambda m: m.text == "📈 Total Users")
+async def total_users(message: types.Message):
+    if str(message.from_user.id) != get_setting('admin_id'): return
+    conn = sqlite3.connect('bot_pro.db')
+    count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    conn.close()
+    await message.reply(f"📊 စုစုပေါင်းအသုံးပြုသူ: {count} ယောက်")
 
-        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(btn_name, url=btn_link))
-        await message.reply("ကိုကို့ Bot အတွက် ပုံစံလေး ရပါပြီ-")
-        await bot.send_message(message.chat.id, text, reply_markup=kb)
-    except:
-        await message.reply("ပုံစံမှားနေပါတယ် ကိုကို။ \n'စာသား | ခလုတ်အမည် | လင့်ခ်' ပုံစံ ပို့ပေးပါ။")
-    await BotPro.main_menu.set()
+@dp.message_handler(lambda m: m.text == "📢 Broadcast")
+async def broad_prompt(message: types.Message):
+    if str(message.from_user.id) != get_setting('admin_id'): return
+    await message.reply("User အားလုံးဆီ ပို့မည့်စာသားကို ပို့ပေးပါ။")
+    await AdminStates.waiting_for_broadcast.set()
 
-# --- TTS Logic ---
-@dp.message_handler(state=BotPro.making_tts)
-async def process_tts(message: types.Message):
-    await message.reply("အသံဖိုင် လုပ်နေပါတယ်...")
-    tts = gTTS(message.text, lang='en') # မြန်မာစာအတွက်ဆို 'my' ပြောင်းနိုင်တယ် (support ရရင်)
-    voice_io = io.BytesIO()
-    tts.write_to_fp(voice_io)
-    voice_io.seek(0)
-    await bot.send_voice(message.chat.id, voice_io, caption="ကိုကို့အတွက် အသံဖိုင် ရပါပြီ!")
-    await BotPro.main_menu.set()
+@dp.message_handler(state=AdminStates.waiting_for_broadcast)
+async def perform_broadcast(message: types.Message, state: FSMContext):
+    conn = sqlite3.connect('bot_pro.db')
+    users = conn.execute("SELECT user_id FROM users").fetchall()
+    conn.close()
+    
+    count = 0
+    for user in users:
+        try:
+            await bot.send_message(user[0], message.text)
+            count += 1
+            await asyncio.sleep(0.05) # Rate limit ရှောင်ရန်
+        except: pass
+    
+    await message.reply(f"✅ လူပေါင်း {count} ယောက်ထံ ပေးပို့ပြီးပါပြီ။", reply_markup=admin_menu())
+    await state.finish()
 
-# --- Broadcast Logic ---
-@dp.message_handler(state=BotPro.broadcasting)
-async def process_broadcast(message: types.Message):
-    # ဒီမှာကတော့ လက်ရှိ User တစ်ယောက်တည်းမို့လို့ ကိုယ့်ကိုယ်ကိုယ်ပဲ ပြန်ပို့ပြမယ်
-    await message.reply(f"သတင်းစကားကို ပို့လိုက်ပါပြီ- \n\n{message.text}")
-    await BotPro.main_menu.set()
+@dp.message_handler(lambda m: m.text == "🔙 Back", state="*")
+async def go_back(message: types.Message, state: FSMContext):
+    await state.finish()
+    await message.reply("ပင်မ Menu သို့ ပြန်ရောက်ပါပြီ။", reply_markup=main_menu(message.from_user.id))
 
+# --- ပင်မ Menu Features များ ---
+@dp.message_handler(lambda m: m.text == "📊 My Stats")
+async def my_stats(message: types.Message):
+    if await is_maintenance(message): return
+    await message.reply(f"👤 အမည်: {message.from_user.full_name}\n🆔 ID: {message.from_user.id}")
+
+@dp.message_handler(lambda m: m.text == "➕ Build Bot")
+async def build_bot(message: types.Message):
+    if await is_maintenance(message): return
+    await message.reply("တည်ဆောက်လိုသော Bot Token ကို ပို့ပေးပါ။")
+
+# Main Runner
 async def main():
     Thread(target=run_flask, daemon=True).start()
     await dp.start_polling()

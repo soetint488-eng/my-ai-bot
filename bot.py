@@ -10,7 +10,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # --- 1. Web Server for Cron-job ---
 app = Flask('')
 @app.route('/')
-def home(): return "200 OK - Bot is Active!"
+def home(): return "200 OK - Dominic Studio is Active!"
 
 def run_web(): app.run(host='0.0.0.0', port=8080)
 def keep_alive(): Thread(target=run_web).start()
@@ -24,73 +24,70 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# --- 3. UI Keyboards ---
+# --- 3. UI Keyboards (Premium Look) ---
+
 def get_main_keyboard():
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton("✂️ BG Remover", callback_data="menu_bg"),
-        InlineKeyboardButton("🎨 Pixo Filters", callback_data="menu_pixo"),
-        InlineKeyboardButton("☀️ Adjustments", callback_data="menu_adj"),
-        InlineKeyboardButton("❌ Cancel", callback_data="cancel")
+        InlineKeyboardButton("🖼 Background Color", callback_data="menu_bg"),
+        InlineKeyboardButton("🎭 FX Filters", callback_data="menu_pixo"),
+        InlineKeyboardButton("⚙️ Photo Adjust", callback_data="menu_adj"),
+        InlineKeyboardButton("💎 Transparent PNG", callback_data="bg_transparent")
     )
+    kb.row(InlineKeyboardButton("❌ Close Editor", callback_data="cancel"))
     return kb
 
 def get_pixo_filters():
     kb = InlineKeyboardMarkup(row_width=3)
-    filters = ["Sepia", "Grayscale", "Invert", "Vintage", "Kodachrome", "Technicolor"]
-    for f in filters:
-        kb.insert(InlineKeyboardButton(f, callback_data=f"pixo_{f.lower()}"))
-    kb.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_main"))
+    filters = {
+        "🎞 Vintage": "vintage", "🌑 Gray": "grayscale", "🎨 Sepia": "sepia",
+        "🌈 Techni": "technicolor", "🎭 Kodach": "kodachrome", "🔄 Invert": "invert"
+    }
+    for label, code in filters.items():
+        kb.insert(InlineKeyboardButton(label, callback_data=f"pixo_{code}"))
+    kb.row(InlineKeyboardButton("🔙 Back to Tools", callback_data="back_to_main"))
     return kb
 
 def get_adj_options():
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
         InlineKeyboardButton("🔆 Brighten", callback_data="adj_bright"),
-        InlineKeyboardButton("🌈 High Sat", callback_data="adj_sat"),
-        InlineKeyboardButton("🎭 Auto Enhance", callback_data="adj_auto"),
-        InlineKeyboardButton("🔙 Back", callback_data="back_to_main")
+        InlineKeyboardButton("🍭 Vivid Color", callback_data="adj_sat"),
+        InlineKeyboardButton("🤖 AI Magic Fix", callback_data="adj_auto"),
+        InlineKeyboardButton("🔙 Back to Tools", callback_data="back_to_main")
     )
     return kb
 
 def get_bg_colors():
     kb = InlineKeyboardMarkup(row_width=3)
-    colors = ["Blue", "White", "Red", "Green", "Yellow", "Transparent"]
-    for c in colors:
-        kb.insert(InlineKeyboardButton(c, callback_data=f"bg_{c.lower()}"))
-    kb.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_main"))
+    colors = {
+        "🔵 Blue": "blue", "⚪ White": "white", "🔴 Red": "red",
+        "🟢 Green": "green", "🟡 Yellow": "yellow", "🟣 Pink": "pink"
+    }
+    for label, code in colors.items():
+        kb.insert(InlineKeyboardButton(label, callback_data=f"bg_{code}"))
+    kb.row(InlineKeyboardButton("🔙 Back to Tools", callback_data="back_to_main"))
     return kb
 
-# --- 4. Logic Functions ---
-
-async def call_pixo_api(photo_url, action):
-    # Pixo Image Processing API URL
-    base_url = "https://api.pixoeditor.com/v1/transform"
-    params = {
-        'apikey': PIXO_API_KEY,
-        'image': photo_url,
-    }
-    
-    # Action အလိုက် Parameter ပြောင်းလဲခြင်း
-    if action == "sepia": params['filter'] = 'sepia'
-    elif action == "grayscale": params['filter'] = 'grayscale'
-    elif action == "invert": params['filter'] = 'invert'
-    elif action == "bright": params['brightness'] = '30'
-    elif action == "sat": params['saturation'] = '50'
-    elif action == "auto": params['auto_enhance'] = 'true'
-    
-    res = requests.get(base_url, params=params)
-    return res
-
-# --- 5. Handlers ---
+# --- 4. Handlers ---
 
 @dp.message_handler(commands=['start'])
 async def start(m: types.Message):
-    await m.reply("📸 **Dominic Pixo Editor AI**\n\nပုံပို့ပြီး Editor စတင်အသုံးပြုပါဗျ။", parse_mode="Markdown")
+    await m.reply(
+        "👋 **Welcome to Dominic Pro Studio!**\n\n"
+        "AI စနစ်သုံး Professional Photo Editor ဖြစ်ပါတယ်။\n"
+        "စတင်ရန် ဓာတ်ပုံတစ်ပုံ ပို့ပေးပါ ကိုကို။",
+        parse_mode="Markdown"
+    )
 
 @dp.message_handler(content_types=['photo'])
 async def photo_in(m: types.Message):
-    await m.reply("✨ **ဓာတ်ပုံရရှိပါပြီ**\nအောက်ပါ Tools များကို အသုံးပြုနိုင်ပါပြီ-", reply_markup=get_main_keyboard())
+    # ဒီမှာ reply_to_message_id ထည့်ထားတာက Error မတက်အောင် ကာကွယ်ပေးပါတယ်
+    await m.reply(
+        "📸 **Image Detected!**\nပြုပြင်လိုသည့် Tool ကို ရွေးချယ်ပါ-",
+        reply_markup=get_main_keyboard(),
+        parse_mode="Markdown"
+    )
 
 @dp.callback_query_handler(lambda c: True)
 async def callbacks(cb: types.CallbackQuery):
@@ -98,42 +95,68 @@ async def callbacks(cb: types.CallbackQuery):
     cid = cb.message.chat.id
     mid = cb.message.message_id
 
-    if d == "menu_bg": await bot.edit_message_text("✂️ **Background Colors**", cid, mid, reply_markup=get_bg_colors())
-    elif d == "menu_pixo": await bot.edit_message_text("🎨 **Pixo Special Filters**", cid, mid, reply_markup=get_pixo_filters())
-    elif d == "menu_adj": await bot.edit_message_text("☀️ **Image Adjustments**", cid, mid, reply_markup=get_adj_options())
-    elif d == "back_to_main": await bot.edit_message_text("✨ Tools များကို ပြန်လည်ရွေးချယ်ပါ-", cid, mid, reply_markup=get_main_keyboard())
-    elif d == "cancel": await bot.delete_message(cid, mid)
+    if d == "menu_bg":
+        await bot.edit_message_text("🖼 **Choose Background Color**", cid, mid, reply_markup=get_bg_colors(), parse_mode="Markdown")
+        return
+    elif d == "menu_pixo":
+        await bot.edit_message_text("🎨 **Special FX Filters**", cid, mid, reply_markup=get_pixo_filters(), parse_mode="Markdown")
+        return
+    elif d == "menu_adj":
+        await bot.edit_message_text("⚙️ **Professional Adjustments**", cid, mid, reply_markup=get_adj_options(), parse_mode="Markdown")
+        return
+    elif d == "back_to_main":
+        await bot.edit_message_text("✨ **Main Editor Menu**", cid, mid, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+        return
+    elif d == "cancel":
+        await bot.delete_message(cid, mid)
+        return
     
-    # API Processing Logic
-    else:
-        await bot.edit_message_text("🚀 AI Processing... ခဏစောင့်ပါဗျ။", cid, mid)
-        try:
+    # --- API Processing ---
+    await bot.edit_message_text("⚙️ **Dominic AI is processing...**", cid, mid, parse_mode="Markdown")
+    
+    try:
+        # ပုံကို ပြန်ရှာတဲ့အခါ ပိုသေချာအောင် စစ်ဆေးမယ်
+        if cb.message.reply_to_message and cb.message.reply_to_message.photo:
             file = await cb.message.reply_to_message.photo[-1].get_file()
             p_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file.file_path}"
-            
-            # Pixo Tools
-            if d.startswith("pixo_") or d.startswith("adj_"):
-                action = d.split("_")[1]
-                res = await call_pixo_api(p_url, action)
-                caption = f"✅ Pixo {action.capitalize()} Effect အောင်မြင်ပါတယ်!"
-            
-            # Remove.bg Tools
-            elif d.startswith("bg_"):
-                color = d.split("_")[1]
-                params = {'image_url': p_url, 'size': 'auto'}
-                if color != "transparent": params['bg_color'] = color
-                res = requests.post('https://api.remove.bg/v1.0/removebg', data=params, headers={'X-API-Key': REMOVE_BG_API_KEY})
-                caption = f"✅ {color.capitalize()} Background ပြောင်းလဲပြီးပါပြီ!"
+        else:
+            await bot.send_message(cid, "❌ **Error:** ပုံကို ပြန်ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ ပုံကို အသစ်ပြန်ပို့ပေးပါ။")
+            return
 
-            if res.status_code == 200:
-                out = io.BytesIO(res.content)
-                out.name = "dominic_edit.png"
-                await bot.send_document(cid, document=out, caption=caption)
-                await bot.delete_message(cid, mid)
-            else:
-                await bot.send_message(cid, "❌ API Error ဖြစ်သွားပါတယ်။ Key သို့မဟုတ် Credit စစ်ဆေးပေးပါ။")
-        except:
-            await bot.send_message(cid, "❌ ပုံကို ပြန်လည်ပို့ပေးပါဗျ။")
+        # Pixo Tools
+        if d.startswith("pixo_") or d.startswith("adj_"):
+            action = d.split("_")[1]
+            p_base = "https://api.pixoeditor.com/v1/transform"
+            p_params = {'apikey': PIXO_API_KEY, 'image': p_url}
+            
+            # Map Pixo Actions
+            if action == "auto": p_params['auto_enhance'] = 'true'
+            elif action == "bright": p_params['brightness'] = '30'
+            elif action == "sat": p_params['saturation'] = '50'
+            else: p_params['filter'] = action
+            
+            res = requests.get(p_base, params=p_params)
+            cap = f"🎨 **Pixo Style:** {action.capitalize()}"
+
+        # Remove.bg Tools
+        elif d.startswith("bg_") or d == "bg_transparent":
+            color = d.replace("bg_", "")
+            rb_params = {'image_url': p_url, 'size': 'auto'}
+            if color != "transparent": rb_params['bg_color'] = color
+            res = requests.post('https://api.remove.bg/v1.0/removebg', data=rb_params, headers={'X-API-Key': REMOVE_BG_API_KEY})
+            cap = f"🖼 **Background:** {color.capitalize()}"
+
+        if res.status_code == 200:
+            out = io.BytesIO(res.content)
+            out.name = "dominic_pro.png"
+            await bot.send_document(cid, document=out, caption=f"{cap}\n_Done by Dominic AI_", parse_mode="Markdown")
+            await bot.delete_message(cid, mid)
+        else:
+            await bot.send_message(cid, f"❌ **API Error:** {res.status_code}\nCredit ကျန်မကျန် ပြန်စစ်ပေးပါ ကိုကို။")
+
+    except Exception as e:
+        logging.error(e)
+        await bot.send_message(cid, "❌ **Critical Error!**\nပုံကို ပြန်ပို့ပြီး ထပ်မံကြိုးစားကြည့်ပါ ကိုကို။")
 
     await bot.answer_callback_query(cb.id)
 

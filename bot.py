@@ -18,22 +18,22 @@ app = Flask(__name__)
 is_collecting = False
 
 @app.route('/')
-def home(): return "Collector Active!"
+def home(): return "Party Monitor Active!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- Enhanced Diamond Collector Logic ---
+# --- Monitoring & Collecting Logic ---
 async def collect_process(chat_id):
     global is_collecting
     session_total = 0
-    await bot.send_message(chat_id, "🚀 Diamond Collector စတင်ပါပြီ ကိုကို!")
+    await bot.send_message(chat_id, "🚀 Party Room တွေကို စတင်စောင့်ကြည့်နေပါပြီ ကိုကို!")
     
     while is_collecting:
         try:
-            # Hot Rooms ယူခြင်း (အချက်အလက် ပိုစုံအောင် limit တိုးထားပါတယ်)
-            r = requests.get(f"{BASE_URL}/rooms?limit=15&sort=hot", headers={"Authorization": f"Bearer {LIT_TOKEN}"})
+            # Hot Rooms စာရင်းယူမယ်
+            r = requests.get(f"{BASE_URL}/rooms?limit=10&sort=hot", headers={"Authorization": f"Bearer {LIT_TOKEN}"})
             rooms = r.json().get('entities', [])
             
             for room in rooms:
@@ -41,33 +41,42 @@ async def collect_process(chat_id):
                 
                 room_id = room.get('id')
                 room_name = room.get('name', 'အမည်မရှိအခန်း')
-                user_count = room.get('user_count', 0) # အခန်းထဲရှိ လူဦးရေ
+                user_count = room.get('user_count', 0)
                 
-                # စိန်အိတ် လှမ်းကောက်ခြင်း
-                res = requests.post(f"{BASE_URL}/rooms/{room_id}/diamonds/grab", headers={"Authorization": f"Bearer {LIT_TOKEN}"}, timeout=5)
+                # အခန်းထဲဝင်တိုင်း Info ကို အရင်ပြမယ်
+                info_msg = (
+                    f"📺 **Party Monitoring**\n"
+                    f"━━━━━━━━━━━━━━\n"
+                    f"🏠 အခန်း: {room_name}\n"
+                    f"🆔 ID: `{room_id}`\n"
+                    f"👥 လူဦးရေ: {user_count} ယောက်"
+                )
+                status_sent = await bot.send_message(chat_id, info_msg, parse_mode="Markdown")
                 
-                if res.status_code == 200:
-                    amt = res.json().get('amount', 0)
-                    if amt > 0:
-                        session_total += amt
-                        await bot.send_message(
-                            chat_id, 
-                            f"💎 **စိန်ရရှိပါပြီ!**\n"
-                            f"━━━━━━━━━━━━━━\n"
-                            f"🏠 အခန်းအမည်: {room_name}\n"
-                            f"🆔 Room ID: `{room_id}`\n"
-                            f"👥 လူဦးရေ: {user_count} ယောက်\n"
-                            f"➕ ရရှိစိန်: +{amt}\n"
-                            f"💰 စုစုပေါင်း: {session_total}", 
-                            parse_mode="Markdown"
-                        )
-                # API သက်သာအောင် ခဏနားမယ်
-                await asyncio.sleep(1) 
-        except:
-            pass
-        await asyncio.sleep(5)
+                # စိန်အိတ် (Lucky Bag) ရှိမရှိ စစ်မယ်
+                bag_res = requests.get(f"{BASE_URL}/rooms/{room_id}/luckybags", headers={"Authorization": f"Bearer {LIT_TOKEN}"})
+                bags = bag_res.json().get('entities', [])
+                
+                for bag in bags:
+                    bag_id = bag.get('id')
+                    # စိန်လှမ်းကောက်မယ်
+                    grab_res = requests.post(f"{BASE_URL}/rooms/{room_id}/luckybags/{bag_id}/grab", headers={"Authorization": f"Bearer {LIT_TOKEN}"})
+                    
+                    if grab_res.status_code == 200:
+                        amt = grab_res.json().get('amount', 0)
+                        if amt > 0:
+                            session_total += amt
+                            await bot.send_message(chat_id, f"🎊 **စိန်ရပါပြီ ကိုကို!**\n➕ ရရှိစိန်: +{amt}\n💰 စုစုပေါင်း: {session_total}")
 
-# --- Commands ---
+                # စာမျက်နှာ မရှုပ်အောင် ၅ စက္ကန့်နေရင် လက်ရှိ Room Info စာကို ပြန်ဖျက်ပေးမယ်
+                await asyncio.sleep(5)
+                try:
+                    await bot.delete_message(chat_id, status_sent.message_id)
+                except: pass
+                
+        except: pass
+        await asyncio.sleep(2)
+
 @dp.message_handler(commands=['collect'])
 async def start_collect(message: types.Message):
     global is_collecting
@@ -81,7 +90,7 @@ async def start_collect(message: types.Message):
 async def stop_collect(message: types.Message):
     global is_collecting
     is_collecting = False
-    await message.answer("🛑 Diamond Collector ကို ရပ်လိုက်ပါပြီ။")
+    await message.answer("🛑 စောင့်ကြည့်တာကို ရပ်လိုက်ပါပြီ။")
 
 if __name__ == '__main__':
     Thread(target=run_flask).start()

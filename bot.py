@@ -1,5 +1,4 @@
 import logging
-import asyncio
 import os
 import requests
 from aiogram import Bot, Dispatcher, types
@@ -8,55 +7,62 @@ from flask import Flask
 from threading import Thread
 
 # --- Configuration ---
-API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk' # ကိုကို့ Bot Token
+API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
 LIT_TOKEN = "YWMtOs1AxE6JEfGMQK35LXPHlwC3x2A3exHpkKgjudNTjb0ZQwwAzFsR8JWtDRpn0gquAwMAAAGeH7jqmTht7EDd_nns6iTySRbBrvMZueFVp-UzTJHDDF30mKnSJN8Oug"
-BASE_URL = "http://a1-sgp-ga.easemob.com/1102190223222824/lit"
+ORG_APP = "1102190223222824/lit"
+BASE_URL = f"http://a1-sgp-ga.easemob.com/{ORG_APP}"
 
-# Initialize Bot and Flask
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 app = Flask(__name__)
 
-# --- Flask for Render (Port Listening) ---
 @app.route('/')
-def home():
-    return "Bot is running!"
+def home(): return "Bot Active!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- Telegram Bot Commands ---
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
-    await message.reply("မင်္ဂလာပါ ကိုကို Dominic! စကားပြောဖူးသူစာရင်း ကြည့်ချင်ရင် /list လို့ ပို့ပေးပါဗျ။")
+# --- Logic to Try Multiple Endpoints ---
+def fetch_litmatch_users():
+    headers = {"Authorization": f"Bearer {LIT_TOKEN}"}
+    
+    # စမ်းသပ်မယ့် လမ်းကြောင်းများ
+    endpoints = [
+        f"{BASE_URL}/users/me/contacts/users",
+        f"{BASE_URL}/chatmessages",
+        f"{BASE_URL}/users/love144883120849408/contacts/users"
+    ]
+    
+    for url in endpoints:
+        try:
+            r = requests.get(url, headers=headers, timeout=5)
+            if r.status_code == 200:
+                data = r.json()
+                # API ပုံစံအမျိုးမျိုးအရ data သို့မဟုတ် entities ထဲမှာ ရှာမယ်
+                users = data.get('data') or data.get('entities') or []
+                if users: return users
+        except:
+            continue
+    return []
 
 @dp.message_handler(commands=['list'])
 async def list_users(message: types.Message):
-    await message.answer("🔍 စာရင်းကို ရှာဖွေနေပါတယ်၊ ခဏစောင့်ပါ...")
+    await message.answer("🔍 နည်းလမ်းအမျိုးမျိုးနဲ့ ရှာဖွေနေပါတယ် ကိုကို...")
     
-    url = f"{BASE_URL}/users/love144883120849408/contacts/users"
-    headers = {"Authorization": f"Bearer {LIT_TOKEN}"}
+    users = fetch_litmatch_users()
     
-    try:
-        r = requests.get(url, headers=headers, timeout=10)
-        users = r.json().get('data', [])
-        
-        if not users:
-            await message.answer("⚠️ စကားပြောဖူးသူ မတွေ့ပါဘူး ကိုကို။")
-            return
+    if not users:
+        await message.answer("⚠️ နည်းလမ်းအားလုံး စမ်းကြည့်ပေမယ့် မတွေ့ပါဘူး ကိုကို။ Token သို့မဟုတ် ID မှားနေတာ ဖြစ်နိုင်ပါတယ်ဗျ။")
+        return
 
-        text = "📋 **စကားပြောဖူးသူများ စာရင်း**\n━━━━━━━━━━━━━━\n"
-        for i, name in enumerate(users, 1):
-            text += f"{i}။ {name}\n"
-        
-        await message.answer(text, parse_mode="Markdown")
-    except:
-        await message.answer("❌ Litmatch Server နဲ့ ချိတ်ဆက်လို့မရပါဘူး ကိုကို။")
+    text = "📋 **စကားပြောဖူးသူများ စာရင်း**\n"
+    for i, u in enumerate(users[:20], 1): # အယောက် ၂၀ ထိပဲ အရင်ပြမယ်
+        name = u if isinstance(u, str) else u.get('nickname') or u.get('from')
+        text += f"{i}။ {name}\n"
+    
+    await message.answer(text, parse_mode="Markdown")
 
-# --- Start ---
 if __name__ == '__main__':
-    # Flask ကို Background မှာ Run မယ်
     Thread(target=run_flask).start()
-    # Telegram Bot ကို Run မယ်
     executor.start_polling(dp, skip_updates=True)

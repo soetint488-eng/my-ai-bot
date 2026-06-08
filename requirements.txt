@@ -1,5 +1,2 @@
-aiogram==2.25.1
-requests
-flask
-gunicorn
-websockets
+aiogram>=2.25.1,<3.0
+requests>=2.31.0

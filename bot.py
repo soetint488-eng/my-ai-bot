@@ -1,91 +1,150 @@
 import os
-import requests
+import sys
 import time
+import asyncio
+import logging
+import requests
+from aiogram import Bot, Dispatcher, types
+from aiogram.utils import executor
 
 # --- Configurations ---
-# GitHub Secrets ထဲတွင် သေချာထည့်ပေးရမည့် အချက်အလက်များ
-API_TOKEN = os.getenv('BOT_TOKEN', '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk')
-# ကိုကို့ရဲ့ Telegram Chat ID (ကိုယ့်ဆီ စာတိုက်ရိုက်ရောက်လာရန်)
-# @userinfobot ကနေ မိမိ ID ကို ယူပြီး ဒီမှာ ထည့်နိုင်ပါတယ် (ဥပမာ- 12345678)
-CHAT_ID = os.getenv('CHAT_ID', '8584422107') 
+API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
+logging.basicConfig(level=logging.INFO)
+
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
+
+# Targets
+TARGET_URL = "https://akmcdn.ml.youngjoygame.com/predownload/PredownloadCombine_1173.1-1202.1_astc.zip"
+OUTPUT_FILE = "MLBB_Patch.zip"
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Android; 13; MLBB)',
-    'Connection': 'keep-alive',
     'Accept': '*/*'
 }
 
-def send_telegram_report(text):
-    """ရလာဒ်များကို Telegram ဆီသို့ Message လှမ်းပို့ခြင်း"""
-    url = f"https://api.telegram.org/bot{API_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": text,
-        "parse_mode": "Markdown",
-        "disable_web_page_preview": True
-    }
-    try:
-        res = requests.post(url, json=payload, timeout=10)
-        if res.status_code == 200:
-            print("🟢 Report transmitted to Telegram successfully.")
-        else:
-            print(f"❌ Failed to send message: {res.text}")
-    except Exception as e:
-        print(f"⚠️ Telegram Grid Error: {e}")
+# Global Control Flags (ဒေါင်းလုဒ် အခြေအနေကို စောင့်ကြည့်ရန်)
+download_task = None
+is_stopping = False
 
-def run_matrix_scan():
-    print("🛰️ INITIALIZING MOONTON CLUSTER SCAN...")
-    
-    # 1. Moonton IP Gateway Detection
-    ip_url = "http://ip.ml.youngjoygame.com:30220/myip"
-    detected_ip = "Unknown"
-    ip_status = "🔴 OFFLINE"
+async def download_worker(message: types.Message, msg_id: int):
+    """ဒေါင်းလုဒ် ဆွဲပေးပြီး Telegram UI အား မွမ်းမံပေးမည့် Background Worker"""
+    global is_stopping
+    is_stopping = False
     
     try:
-        ip_res = requests.get(ip_url, headers=HEADERS, timeout=6, verify=False)
-        if ip_res.status_code == 200 and ip_res.text.strip():
-            detected_ip = ip_res.text.strip()
-            ip_status = "🟢 ACTIVE"
-    except Exception:
-        ip_status = "⚠️ GATEWAY TIMEOUT"
-
-    # 2. Asset Targets
-    targets = {
-        "Magic Chess Mode": "res_version5/ChessPlayerRes/630.1/ModeSize.bytes",
-        "Solo Offline Mode": "res_version5/SoloMode/114.1/ModeSize.bytes",
-        "DisOrder (Overdrive)": "res_version5/DisOrderMode/458.1/ModeSize.bytes"
-    }
-    
-    base_url = "https://akmcdn.ml.youngjoygame.com/"
-    
-    report_text = (
-        "🏁 **AUTOMATED SYSTEM MATRIX REPORT**\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🌐 **MOONTON IP GATEWAY:**\n"
-        f"➥ Gateway Status: `{ip_status}`\n"
-        f"➥ Host Node IP: `{detected_ip}`\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📦 **CDN ASSET REGISTRY STATUS:**\n\n"
-    )
-    
-    for mode_name, path in targets.items():
-        full_url = f"{base_url}{path}"
-        try:
-            res = requests.head(full_url, headers=HEADERS, timeout=6, verify=False)
-            if res.status_code == 200:
-                size_kb = round(int(res.headers.get('Content-Length', 0)) / 1024, 2)
-                report_text += f"🔷 **{mode_name}**\n   Status: `🟢 ONLINE`\n   Size: `{size_kb} KB`\n   Node: `{path.split('/')[-2]}`\n\n"
-            else:
-                report_text += f"🔷 **{mode_name}**\n   Status: `🔴 REJECTED ({res.status_code})`\n\n"
-        except Exception:
-            report_text += f"🔷 **{mode_name}**\n   Status: `⚠️ UNREACHABLE`\n\n"
+        # Blocking requests.get ကို non-blocking ဖြစ်အောင် Thread Pool ထဲတွင် Run ခြင်း
+        loop = asyncio.get_event_loop()
+        
+        def fetch_stream():
+            return requests.get(TARGET_URL, headers=HEADERS, stream=True, timeout=15)
             
-        time.sleep(0.5)
+        res = await loop.run_in_executor(None, fetch_stream)
+        
+        if res.status_code != 200:
+            await bot.edit_message_text(f"❌ **ERROR:** Server rejected status `{res.status_code}`", message.chat.id, msg_id)
+            return
 
-    report_text += "━━━━━━━━━━━━━━━━━━━━━━━━\n🔥 *All automated loops flushed cleanly by Dominic.*"
+        total_length = int(res.headers.get('content-length', 0))
+        total_mb = round(total_length / (1024 * 1024), 2)
+        downloaded = 0
+        last_update_time = time.time()
+
+        # အမှန်တကယ် ဖိုင်ထဲသို့ ရေးမည့် စနစ်
+        with open(OUTPUT_FILE, 'wb') as f:
+            # Chunk size ကို 256KB ထားပြီး ကွင်းဆက်ပတ်မည်
+            for chunk in res.iter_content(chunk_size=1024 * 256):
+                
+                # ကိုကိုက stop ဟု ရိုက်လိုက်ပါက ဤနေရာတွင် ချက်ချင်း ဖြတ်ချမည်
+                if is_stopping:
+                    res.close()
+                    await bot.edit_message_text("⏸️ **DOWNLOAD PROCESS FORCIBLY TERMINATED BY DOMINIC.**\n💾 *Cache registry cleared safely.*", message.chat.id, msg_id)
+                    return
+                
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    
+                    # Telegram Flooding ကာကွယ်ရန် ၃ စက္ကန့်ခြားမှတစ်ကြိမ် ပြင်မည်
+                    if time.time() - last_update_time > 3.0 or downloaded == total_length:
+                        last_update_time = time.time()
+                        
+                        done = int(20 * downloaded / total_length)
+                        current_mb = round(downloaded / (1024 * 1024), 2)
+                        percentage = round((downloaded / total_length) * 100, 1)
+                        
+                        progress_bar = f"[{'▓' * done}{'░' * (20 - done)}]"
+                        
+                        ui_text = (
+                            "⚡ **PREMIUM LOCAL DOWNLOAD MATRIX**\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📦 **File:** `{OUTPUT_FILE}`\n"
+                            f"📟 **Progress:** `{progress_bar}` `{percentage}%`\n"
+                            f"📊 **Data Stream:** `{current_mb} / {total_mb} MB`\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "🌌 *Status: ACTIVE DOWNLOADING NODE*"
+                        )
+                        try:
+                            await bot.edit_message_text(ui_text, message.chat.id, msg_id, parse_mode="Markdown")
+                        except Exception:
+                            pass
+                        
+                        # Async Loop ကို အသက်ရှူချောင်စေရန် ခဏလွှတ်ပေးခြင်း
+                        await asyncio.sleep(0.01)
+
+        # ပြီးမြောက်သွားပါက အောင်မြင်ကြောင်း UI တက်မည်
+        success_ui = (
+            "🏁 **DOWNLOAD PROCESS COMPLETED SUCCESSFULLY**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 **Saved Target:** `{OUTPUT_FILE}`\n"
+            f"📊 **Total Size:** `{total_mb} MB`\n"
+            f"🟢 **Status:** `FULLY SYNCED & INTEGRATED`\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔥 *Process concluded cleanly by Dominic.*"
+        )
+        await bot.edit_message_text(success_ui, message.chat.id, msg_id, parse_mode="Markdown")
+
+    except Exception as e:
+        await bot.edit_message_text(f"⚠️ **RUNTIME EXCEPTION:** `{str(e)}`", message.chat.id, msg_id)
+
+# --- Command Handlers ---
+
+@dp.message_handler(commands=['start'])
+async def cmd_start(message: types.Message):
+    await message.answer(
+        "⚡ **DOMINIC LOCAL DOWNLOAD CONTROLLER**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💬 **Available Text Commands:**\n"
+        "➥ `download` - Start downloading asset file\n"
+        "➥ `stop` - Force stop the current process\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📡 *Status: RUNNING LOCAL CORE*", parse_mode="Markdown"
+    )
+
+@dp.message_handler(lambda message: message.text.lower() == 'download')
+async def handle_download(message: types.Message):
+    global download_task
     
-    # Send directly to Dominic's chat
-    send_telegram_report(report_text)
+    # လက်ရှိ ဒေါင်းလက်စ ရှိမရှိ စစ်ဆေးခြင်း
+    if download_task and not download_task.done():
+        await message.answer("💡 **NOTICE:** A downloading process is already active inside the grid.")
+        return
+        
+    init_msg = await message.answer("📡 **INITIALIZING LOCAL STREAM ENGINE...**")
+    
+    # Background Task အဖြစ် Run လိုက်ခြင်းကြောင့် Bot ကြီး ကြောင်မသွားဘဲ စာတွေကို ဆက်ဖတ်နိုင်မည်
+    download_task = asyncio.create_task(download_worker(message, init_msg.message_id))
+
+@dp.message_handler(lambda message: message.text.lower() == 'stop')
+async def handle_stop(message: types.Message):
+    global download_task, is_stopping
+    
+    if download_task and not download_task.done():
+        is_stopping = True
+        await message.answer("🛑 **DEPLOYING STOP SIGNAL...** Please wait for the loop to terminate safely.")
+    else:
+        await message.answer("💡 **NOTICE:** There are no active downloading nodes running right now.")
 
 if __name__ == '__main__':
-    run_matrix_scan()
+    print("Dominic's Standalone Bot Core is Online.")
+    executor.start_polling(dp, skip_updates=True)

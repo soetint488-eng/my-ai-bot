@@ -1,5 +1,6 @@
 import logging
 import requests
+import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 from aiogram.dispatcher import FSMContext
@@ -15,124 +16,89 @@ bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-# --- States ---
-class MyIDValidatorChain(StatesGroup):
-    waiting_phone = State()
-
-# Header configuration for API
 HEADERS = {
-    'User-Agent': 'MyID/3.2.1 (Android; 13)',
-    'Content-Type': 'application/json'
+    'User-Agent': 'Mozilla/5.0 (Android; 13; MLBB)',
+    'Connection': 'keep-alive',
+    'Accept': '*/*'
 }
-
-# --- Premium Keyboards ---
-def get_cancel_keyboard():
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🛑 ABORT CHECK", callback_data="cancel_action"))
-    return markup
 
 # --- Handlers ---
 
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
-    welcome_text = (
-        "⚡ **MYID STATUS VALIDATOR CORE**\n"
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("📡 LAUNCH SYSTEM MATRIX", callback_data="run_scan"))
+    
+    welcome = (
+        "⚡ **MLBB MULTI-SCANNER & IP CORE**\n"
         "🌌 *DEVELOPED BY DOMINIC*\n"
-        "📶 SYSTEM STATUS: OPERATIONAL\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "Welcome to the node verification module. "
-        "Analyze specific endpoints to verify profile integrity and active registry status.\n\n"
-        "🛠 **SYSTEM COMMANDS:**\n"
-        "➥ /check - Validate Target Profile\n"
+        "Directly query Moonton's CDN cluster paths and network "
+        "gateways to analyze resource status and host node IPs in real-time.\n\n"
+        "🎯 Click below to execute automated thread query:",
+        reply_markup=markup
+    )
+    await message.answer(welcome, parse_mode="Markdown")
+
+@dp.callback_query_handler(text="run_scan")
+async def run_multi_scan(callback_query: types.CallbackQuery):
+    status_msg = await callback_query.message.edit_text("🛰 **INITIALIZING THREAD MATRIX ANALYSIS...**")
+    
+    # ၁။ IP Lookup Section (အသစ်ပေါင်းထည့်ထားသော Moonton IP Gateway စစ်ဆေးချက်)
+    ip_url = "http://ip.ml.youngjoygame.com:30220/myip"
+    detected_ip = "Unknown"
+    ip_status = "🔴 OFFLINE"
+    
+    try:
+        ip_res = requests.get(ip_url, headers=HEADERS, timeout=5)
+        if ip_res.status_code == 200 and ip_res.text.strip():
+            detected_ip = ip_res.text.strip()
+            ip_status = "🟢 ACTIVE"
+    except Exception:
+        ip_status = "⚠️ GATEWAY TIMEOUT"
+
+    # ၂။ Asset Cluster Targets Section
+    targets = {
+        "Magic Chess Mode": "res_version5/ChessPlayerRes/630.1/ModeSize.bytes",
+        "Solo Offline Mode": "res_version5/SoloMode/114.1/ModeSize.bytes",
+        "DisOrder (Overdrive)": "res_version5/DisOrderMode/458.1/ModeSize.bytes"
+    }
+    
+    base_url = "https://akmcdn.ml.youngjoygame.com/"
+    
+    # UI Dashboard တည်ဆောက်ခြင်း
+    report_text = (
+        "🏁 **SYSTEM MATRIX ANALYSIS REPORT**\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "⚡ *AWAITING PARAMETERS...*"
+        f"🌐 **MOONTON IP GATEWAY:**\n"
+        f"➥ Gateway Status: `{ip_status}`\n"
+        f"➥ Host Node IP: `{detected_ip}`\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📦 **CDN ASSET REGISTRY STATUS:**\n\n"
     )
-    await message.answer(welcome_text, parse_mode="Markdown")
+    
+    for mode_name, path in targets.items():
+        full_url = f"{base_url}{path}"
+        try:
+            res = requests.head(full_url, headers=HEADERS, timeout=5)
+            if res.status_code == 200:
+                size_kb = round(int(res.headers.get('Content-Length', 0)) / 1024, 2)
+                report_text += f"🔷 **{mode_name}**\n   Status: `🟢 ONLINE`\n   Size: `{size_kb} KB`\n   Node: `{path.split('/')[-2]}`\n\n"
+            else:
+                report_text += f"🔷 **{mode_name}**\n   Status: `🔴 REJECTED ({res.status_code})`\n\n"
+        except Exception:
+            report_text += f"🔷 **{mode_name}**\n   Status: `⚠️ UNREACHABLE`\n\n"
+            
+        await asyncio.sleep(0.2) # Flood Protection Interval
 
-@dp.message_handler(commands=['check'], state="*")
-async def start_check(message: types.Message):
-    await message.answer(
-        "📱 **ENTER TARGET PHONE NUMBER:**\n"
-        "Format: `09XXXXXXXXX`", 
-        reply_markup=get_cancel_keyboard(),
-        parse_mode="Markdown"
-    )
-    await MyIDValidatorChain.waiting_phone.set()
-
-@dp.callback_query_handler(text="cancel_action", state="*")
-async def cancel_action(callback_query: types.CallbackQuery, state: FSMContext):
-    await state.finish()
-    await callback_query.message.edit_text("❌ **PROCESS TERMINATED.** Security cache wiped safely.")
+    report_text += "━━━━━━━━━━━━━━━━━━━━━━━━\n🔥 *All queries flushed cleanly by Dominic.*"
+    
+    re_markup = InlineKeyboardMarkup()
+    re_markup.add(InlineKeyboardButton("🔄 RE-RUN ANALYSIS", callback_data="run_scan"))
+    
+    await status_msg.edit_text(report_text, parse_mode="Markdown", reply_markup=re_markup)
     await callback_query.answer()
 
-@dp.message_handler(state=MyIDValidatorChain.waiting_phone)
-async def process_phone(message: types.Message, state: FSMContext):
-    phone = message.text.strip()
-    
-    if not phone.startswith("09") or len(phone) < 9:
-        return await message.reply("❌ **ERROR:** Invalid format. Target must start with 09.")
-
-    status_msg = await message.answer(
-        f"📡 **QUERYING GATEWAY REGISTRY...**\n"
-        f"🎯 Target: `{phone}`", 
-        parse_mode="Markdown"
-    )
-    
-    url = f"https://apis.mytel.com.mm/myid/authen/v1.0/v2/login/action/check-account?phoneNumber={phone}"
-
-    try:
-        # Request only once to parse the registry status securely
-        res = requests.get(url, headers=HEADERS, timeout=8)
-        
-        if res.status_code == 200:
-            try:
-                res_data = res.json()
-                # Check response fields to see if the user profile exists and is active
-                # Adjust flags according to the Mytel API structure returned
-                is_active = res_data.get("status") == 1 or res_data.get("active", True)
-                
-                if is_active:
-                    account_status = "🟢 ACTIVE / REGISTERED"
-                else:
-                    account_status = "🟡 INACTIVE / SUSPENDED"
-            except:
-                # If json parsing fails but status is 200, the account exists in the gateway
-                account_status = "🟢 ACTIVE (Verified Endpoint)"
-                
-            summary_text = (
-                f"🏁 **NODE ANALYSIS REPORT**\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📱 **Target Node:** `{phone}`\n"
-                f"🔒 **Registry Status:** `{account_status}`\n"
-                f"📡 **Gateway Code:** `200 OK`\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🔥 *Verification cycle flushed cleanly by Dominic.*"
-            )
-        elif res.status_code == 404:
-            summary_text = (
-                f"🏁 **NODE ANALYSIS REPORT**\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📱 **Target Node:** `{phone}`\n"
-                f"❌ **Registry Status:** `🔴 NOT REGISTERED / UNKNOWN`\n"
-                f"📡 **Gateway Code:** `404 Not Found`\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🔥 *Verification cycle completed.*"
-            )
-        else:
-            summary_text = (
-                f"⚠️ **GATEWAY REJECTION**\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📱 **Target Node:** `{phone}`\n"
-                f"❌ **Error Code:** `{res.status_code}`\n"
-                f"💡 Server did not return a valid profile status."
-            )
-            
-    except Exception as e:
-        summary_text = f"❌ **RUNTIME EXCEPTION:** `{str(e)}`"
-
-    await status_msg.edit_text(summary_text, parse_mode="Markdown")
-    await state.finish()
-
 if __name__ == '__main__':
-    print("Dominic's Profile Validator is Live.")
+    print("Dominic's Integrated Multi-Scanner Core is Online.")
     executor.start_polling(dp, skip_updates=True)

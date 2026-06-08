@@ -1,9 +1,8 @@
 import os
-import sys
 import time
 import asyncio
 import logging
-import requests
+import aiohttp
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 
@@ -14,126 +13,118 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# Targets
+# Target Asset URL
 TARGET_URL = "https://akmcdn.ml.youngjoygame.com/predownload/PredownloadCombine_1173.1-1202.1_astc.zip"
 OUTPUT_FILE = "MLBB_Patch.zip"
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Android; 13; MLBB)',
-    'Accept': '*/*'
-}
-
-# Global Control Flags (ဒေါင်းလုဒ် အခြေအနေကို စောင့်ကြည့်ရန်)
+# Global System Flags
 download_task = None
 is_stopping = False
 
-async def download_worker(message: types.Message, msg_id: int):
-    """ဒေါင်းလုဒ် ဆွဲပေးပြီး Telegram UI အား မွမ်းမံပေးမည့် Background Worker"""
+async def download_worker(chat_id: int, msg_id: int):
+    """aiohttp ဖြင့် စစ်မှန်သော Non-blocking Async Stream ဖြင့် ဒေါင်းလုဒ်ဆွဲမည့် စနစ်"""
     global is_stopping
     is_stopping = False
     
+    # 30-second connection timeout, 5-minute total timeout
+    timeout = aiohttp.ClientTimeout(total=300, connect=30)
+    
     try:
-        # Blocking requests.get ကို non-blocking ဖြစ်အောင် Thread Pool ထဲတွင် Run ခြင်း
-        loop = asyncio.get_event_loop()
-        
-        def fetch_stream():
-            return requests.get(TARGET_URL, headers=HEADERS, stream=True, timeout=15)
-            
-        res = await loop.run_in_executor(None, fetch_stream)
-        
-        if res.status_code != 200:
-            await bot.edit_message_text(f"❌ **ERROR:** Server rejected status `{res.status_code}`", message.chat.id, msg_id)
-            return
-
-        total_length = int(res.headers.get('content-length', 0))
-        total_mb = round(total_length / (1024 * 1024), 2)
-        downloaded = 0
-        last_update_time = time.time()
-
-        # အမှန်တကယ် ဖိုင်ထဲသို့ ရေးမည့် စနစ်
-        with open(OUTPUT_FILE, 'wb') as f:
-            # Chunk size ကို 256KB ထားပြီး ကွင်းဆက်ပတ်မည်
-            for chunk in res.iter_content(chunk_size=1024 * 256):
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(TARGET_URL) as response:
                 
-                # ကိုကိုက stop ဟု ရိုက်လိုက်ပါက ဤနေရာတွင် ချက်ချင်း ဖြတ်ချမည်
-                if is_stopping:
-                    res.close()
-                    await bot.edit_message_text("⏸️ **DOWNLOAD PROCESS FORCIBLY TERMINATED BY DOMINIC.**\n💾 *Cache registry cleared safely.*", message.chat.id, msg_id)
+                if response.status != 200:
+                    await bot.edit_message_text(f"❌ **ERROR:** Gateway returned status `{response.status}`", chat_id, msg_id)
                     return
-                
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    
-                    # Telegram Flooding ကာကွယ်ရန် ၃ စက္ကန့်ခြားမှတစ်ကြိမ် ပြင်မည်
-                    if time.time() - last_update_time > 3.0 or downloaded == total_length:
-                        last_update_time = time.time()
-                        
-                        done = int(20 * downloaded / total_length)
-                        current_mb = round(downloaded / (1024 * 1024), 2)
-                        percentage = round((downloaded / total_length) * 100, 1)
-                        
-                        progress_bar = f"[{'▓' * done}{'░' * (20 - done)}]"
-                        
-                        ui_text = (
-                            "⚡ **PREMIUM LOCAL DOWNLOAD MATRIX**\n"
-                            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"📦 **File:** `{OUTPUT_FILE}`\n"
-                            f"📟 **Progress:** `{progress_bar}` `{percentage}%`\n"
-                            f"📊 **Data Stream:** `{current_mb} / {total_mb} MB`\n"
-                            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                            "🌌 *Status: ACTIVE DOWNLOADING NODE*"
-                        )
-                        try:
-                            await bot.edit_message_text(ui_text, message.chat.id, msg_id, parse_mode="Markdown")
-                        except Exception:
-                            pass
-                        
-                        # Async Loop ကို အသက်ရှူချောင်စေရန် ခဏလွှတ်ပေးခြင်း
-                        await asyncio.sleep(0.01)
 
-        # ပြီးမြောက်သွားပါက အောင်မြင်ကြောင်း UI တက်မည်
-        success_ui = (
-            "🏁 **DOWNLOAD PROCESS COMPLETED SUCCESSFULLY**\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 **Saved Target:** `{OUTPUT_FILE}`\n"
-            f"📊 **Total Size:** `{total_mb} MB`\n"
-            f"🟢 **Status:** `FULLY SYNCED & INTEGRATED`\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🔥 *Process concluded cleanly by Dominic.*"
-        )
-        await bot.edit_message_text(success_ui, message.chat.id, msg_id, parse_mode="Markdown")
+                # Total Size တွက်ချက်ခြင်း
+                total_length = int(response.headers.get('Content-Length', 0))
+                total_mb = round(total_length / (1024 * 1024), 2)
+                downloaded = 0
+                last_update_time = time.time()
+
+                # Local File Storage Stream ဖွင့်ခြင်း
+                with open(OUTPUT_FILE, 'wb') as f:
+                    # Chunks များကို စနစ်တကျ Async ပုံစံဖြင့် ဖတ်ခြင်း
+                    async for chunk in response.content.iter_chunked(1024 * 512): # 512KB Chunks
+                        
+                        # stop ဟု ရိုက်ပါက ချက်ချင်း Loop ဖြတ်ချမည်
+                        if is_stopping:
+                            await bot.edit_message_text("⏸️ **DOWNLOAD PROCESS FORCIBLY TERMINATED BY DOMINIC.**\n💾 *Local cluster logs flushed safely.*", chat_id, msg_id)
+                            return
+                        
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            
+                            # Rate Limiting: ၃.၅ စက္ကန့်ခြားမှ Telegram UI ကို Edit မည်
+                            if time.time() - last_update_time > 3.5 or downloaded == total_length:
+                                last_update_time = time.time()
+                                
+                                done = int(20 * downloaded / total_length)
+                                current_mb = round(downloaded / (1024 * 1024), 2)
+                                percentage = round((downloaded / total_length) * 100, 1)
+                                
+                                progress_bar = f"[{'▓' * done}{'░' * (20 - done)}]"
+                                
+                                ui_text = (
+                                    "⚡ **PREMIUM ASYNC DOWNLOAD MATRIX**\n"
+                                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                                    f"📦 **Object Target:** `{OUTPUT_FILE}`\n"
+                                    f"📟 **Progress Core:** `{progress_bar}` `{percentage}%`\n"
+                                    f"📊 **Data Transmitted:** `{current_mb} / {total_mb} MB`\n"
+                                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                                    "🌌 *Status: STREAMING TARGET NODE*"
+                                )
+                                try:
+                                    await bot.edit_message_text(ui_text, chat_id, msg_id, parse_mode="Markdown")
+                                except Exception:
+                                    pass
+                                
+                                # CPU Core ကို အသက်ရှူချောင်စေရန်
+                                await asyncio.sleep(0.01)
+
+                # ပြီးမြောက်သွားပါက အောင်မြင်ကြောင်း UI
+                success_ui = (
+                    "🏁 **DOWNLOAD PROCESS COMPLETED SUCCESSFULLY**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📦 **Saved Target:** `{OUTPUT_FILE}`\n"
+                    f"📊 **Final Size:** `{total_mb} MB`\n"
+                    f"🟢 **Status:** `FULLY INTEGRATED`\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🔥 *All network packets flushed safely by Dominic.*"
+                )
+                await bot.edit_message_text(success_ui, chat_id, msg_id, parse_mode="Markdown")
 
     except Exception as e:
-        await bot.edit_message_text(f"⚠️ **RUNTIME EXCEPTION:** `{str(e)}`", message.chat.id, msg_id)
+        await bot.edit_message_text(f"⚠️ **NETWORK EXCEPTION:** `{str(e)}`", chat_id, msg_id)
 
-# --- Command Handlers ---
+# --- Chat Interface Commands ---
 
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
     await message.answer(
-        "⚡ **DOMINIC LOCAL DOWNLOAD CONTROLLER**\n"
+        "⚡ **DOMINIC STANDALONE BOT CORE**\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💬 **Available Text Commands:**\n"
-        "➥ `download` - Start downloading asset file\n"
-        "➥ `stop` - Force stop the current process\n"
+        "💬 **Available Text Signals:**\n"
+        "➥ `download` - Execute async asset stream\n"
+        "➥ `stop` - Terminate background loop safely\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📡 *Status: RUNNING LOCAL CORE*", parse_mode="Markdown"
+        "📡 *Status: CORE ENGINE READY*", parse_mode="Markdown"
     )
 
 @dp.message_handler(lambda message: message.text.lower() == 'download')
 async def handle_download(message: types.Message):
     global download_task
     
-    # လက်ရှိ ဒေါင်းလက်စ ရှိမရှိ စစ်ဆေးခြင်း
     if download_task and not download_task.done():
         await message.answer("💡 **NOTICE:** A downloading process is already active inside the grid.")
         return
         
-    init_msg = await message.answer("📡 **INITIALIZING LOCAL STREAM ENGINE...**")
+    init_msg = await message.answer("📡 **INITIALIZING ASYNC STREAM ENGINE...**")
     
-    # Background Task အဖြစ် Run လိုက်ခြင်းကြောင့် Bot ကြီး ကြောင်မသွားဘဲ စာတွေကို ဆက်ဖတ်နိုင်မည်
-    download_task = asyncio.create_task(download_worker(message, init_msg.message_id))
+    # Pure Async Background Task အဖြစ် Run သောကြောင့် လုံးဝ Crash မဖြစ်တော့ပါ
+    download_task = asyncio.create_task(download_worker(message.chat.id, init_msg.message_id))
 
 @dp.message_handler(lambda message: message.text.lower() == 'stop')
 async def handle_stop(message: types.Message):
@@ -141,10 +132,10 @@ async def handle_stop(message: types.Message):
     
     if download_task and not download_task.done():
         is_stopping = True
-        await message.answer("🛑 **DEPLOYING STOP SIGNAL...** Please wait for the loop to terminate safely.")
+        await message.answer("🛑 **DEPLOYING STOP SIGNAL...** Intercepting download worker thread.")
     else:
         await message.answer("💡 **NOTICE:** There are no active downloading nodes running right now.")
 
 if __name__ == '__main__':
-    print("Dominic's Standalone Bot Core is Online.")
+    print("Dominic's 100% Async Bot Core is Online.")
     executor.start_polling(dp, skip_updates=True)

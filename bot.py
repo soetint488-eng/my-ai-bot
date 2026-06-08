@@ -1,3 +1,4 @@
+import os
 import logging
 import requests
 import asyncio
@@ -8,14 +9,18 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# --- Configuration ---
-API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
+# --- Runtime Configuration ---
+# GitHub Secrets ထဲတွင် BOT_TOKEN အဖြစ် သိမ်းဆည်းထားပါက ၎င်းကို အော်တိုဖတ်မည်။
+# မရှိပါက အောက်ပါ Hardcoded Token အား အသုံးပြုမည်ဖြစ်သည်။
+API_TOKEN = os.getenv('BOT_TOKEN', '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk')
+
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
+# HTTP Headers with Stream Keep-Alive Matrix
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Android; 13; MLBB)',
     'Connection': 'keep-alive',
@@ -35,29 +40,29 @@ async def cmd_start(message: types.Message):
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "Directly query Moonton's CDN cluster paths and network "
         "gateways to analyze resource status and host node IPs in real-time.\n\n"
-        "🎯 Click below to execute automated thread query:",
-        reply_markup=markup
+        "🎯 Click below to execute automated thread query:"
     )
-    await message.answer(welcome, parse_mode="Markdown")
+    await message.answer(welcome, parse_mode="Markdown", reply_markup=markup)
 
 @dp.callback_query_handler(text="run_scan")
 async def run_multi_scan(callback_query: types.CallbackQuery):
     status_msg = await callback_query.message.edit_text("🛰 **INITIALIZING THREAD MATRIX ANALYSIS...**")
     
-    # ၁။ IP Lookup Section (အသစ်ပေါင်းထည့်ထားသော Moonton IP Gateway စစ်ဆေးချက်)
+    # 1. Moonton IP Gateway Detection Target
     ip_url = "http://ip.ml.youngjoygame.com:30220/myip"
     detected_ip = "Unknown"
     ip_status = "🔴 OFFLINE"
     
     try:
-        ip_res = requests.get(ip_url, headers=HEADERS, timeout=5)
+        # verify=False ဖြင့် GitHub Environment အတွင်း SSL Handshake Error များအား ကျော်လွှားရန်
+        ip_res = requests.get(ip_url, headers=HEADERS, timeout=5, verify=False)
         if ip_res.status_code == 200 and ip_res.text.strip():
             detected_ip = ip_res.text.strip()
             ip_status = "🟢 ACTIVE"
     except Exception:
         ip_status = "⚠️ GATEWAY TIMEOUT"
 
-    # ၂။ Asset Cluster Targets Section
+    # 2. Asset Cluster Target Routes
     targets = {
         "Magic Chess Mode": "res_version5/ChessPlayerRes/630.1/ModeSize.bytes",
         "Solo Offline Mode": "res_version5/SoloMode/114.1/ModeSize.bytes",
@@ -66,7 +71,7 @@ async def run_multi_scan(callback_query: types.CallbackQuery):
     
     base_url = "https://akmcdn.ml.youngjoygame.com/"
     
-    # UI Dashboard တည်ဆောက်ခြင်း
+    # Building Premium UI Dashboard Output
     report_text = (
         "🏁 **SYSTEM MATRIX ANALYSIS REPORT**\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -80,7 +85,8 @@ async def run_multi_scan(callback_query: types.CallbackQuery):
     for mode_name, path in targets.items():
         full_url = f"{base_url}{path}"
         try:
-            res = requests.head(full_url, headers=HEADERS, timeout=5)
+            # Check size and availability instantly using HEAD requests
+            res = requests.head(full_url, headers=HEADERS, timeout=5, verify=False)
             if res.status_code == 200:
                 size_kb = round(int(res.headers.get('Content-Length', 0)) / 1024, 2)
                 report_text += f"🔷 **{mode_name}**\n   Status: `🟢 ONLINE`\n   Size: `{size_kb} KB`\n   Node: `{path.split('/')[-2]}`\n\n"
@@ -89,7 +95,7 @@ async def run_multi_scan(callback_query: types.CallbackQuery):
         except Exception:
             report_text += f"🔷 **{mode_name}**\n   Status: `⚠️ UNREACHABLE`\n\n"
             
-        await asyncio.sleep(0.2) # Flood Protection Interval
+        await asyncio.sleep(0.2) # Micro-interval to bypass cloud platform flood protection
 
     report_text += "━━━━━━━━━━━━━━━━━━━━━━━━\n🔥 *All queries flushed cleanly by Dominic.*"
     
@@ -100,5 +106,5 @@ async def run_multi_scan(callback_query: types.CallbackQuery):
     await callback_query.answer()
 
 if __name__ == '__main__':
-    print("Dominic's Integrated Multi-Scanner Core is Online.")
+    print("Dominic's Integrated Multi-Scanner Core is Live inside the target Matrix.")
     executor.start_polling(dp, skip_updates=True)

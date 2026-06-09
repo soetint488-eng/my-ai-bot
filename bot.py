@@ -1,141 +1,181 @@
 import os
 import time
-import asyncio
 import logging
 import aiohttp
-from aiogram import Bot, Dispatcher, types
-from aiogram.utils import executor
+from aiogram import Bot, Dispatcher, executor, types
 
-# --- Configurations ---
-API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
+# 📝 Logging စနစ်ကို ဖွင့်ခြင်း (Render Log ထဲမှာ အမှားရှာရလွယ်ကူစေရန်)
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=API_TOKEN)
+# 🔑 TELEGRAM BOT TOKEN သတ်မှတ်ခြင်း
+# (Render ရဲ့ Environment Variables ထဲမှာ BOT_TOKEN ထည့်ထားရင် အလိုအလျောက်ဖတ်မည်၊ မရှိရင် အောက်ပါ String နေရာတွင် ထည့်ပါ)
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE")
+
+# Bot နှင့် Dispatcher အား ကနဦးသတ်မှတ်ခြင်း
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
-# Target Asset URL
-TARGET_URL = "https://akmcdn.ml.youngjoygame.com/predownload/PredownloadCombine_1173.1-1202.1_astc.zip"
-OUTPUT_FILE = "MLBB_Patch.zip"
 
-# Global System Flags
-download_task = None
-is_stopping = False
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🚀 ၁။ START COMMAND HANDLER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@dp.message_handler(commands=['start', 'help'])
+async def send_welcome(message: types.Message):
+    welcome_text = (
+        "⚡ **MOONTON CORE NETWORK INJECTOR BOT**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 **Developer:** `Dominic`\n"
+        "🟢 **Status:** `ONLINE (CLOUD ENVIRONMENT)`\n\n"
+        "🛠 **ရရှိနိုင်သော စနစ်များနှင့် အသုံးပြုနည်းများ:**\n"
+        "📡 ရိုက်ရန် -> `myip` : Moonton Gateway သို့ Keep-Alive ချိတ်ဆက်ပြီး Server IP နှင့် Ping ကို စစ်ဆေးမည်။\n"
+        "🔍 ရိုက်ရန် -> `/find [Game_ID] [Server_ID]` : Moonton Database ဆီကနေ Player Nickname ကို လှမ်းဆွဲမည်။\n"
+        "📊 ရိုက်ရန် -> `check_report` : Moonton Telemetry Port 30071 လိုင်းကို စမ်းသပ်မည်။\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🌌 *System stabilized and deployed under Dominic Matrix.*"
+    )
+    await message.answer(welcome_text, parse_mode="Markdown")
 
-async def download_worker(chat_id: int, msg_id: int):
-    """aiohttp ဖြင့် စစ်မှန်သော Non-blocking Async Stream ဖြင့် ဒေါင်းလုဒ်ဆွဲမည့် စနစ်"""
-    global is_stopping
-    is_stopping = False
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📡 ၂။ MOONTON KEEP-ALIVE IP & LATENCY SNIFFER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@dp.message_handler(lambda message: message.text.lower() == 'myip')
+async def check_moonton_network(message: types.Message):
+    init_msg = await message.answer("🛰️ **PINGING MOONTON NETWORK GATEWAY...**")
     
-    # 30-second connection timeout, 5-minute total timeout
-    timeout = aiohttp.ClientTimeout(total=300, connect=30)
+    url = "http://ip.ml.youngjoygame.com:30220/myip"
+    RAW_HEADERS = {
+        'Host': 'ip.ml.youngjoygame.com:30220',
+        'Connection': 'keep-alive',
+        'User-Agent': 'Mozilla/5.0 (Android; 13; MLBB)'
+    }
+    
+    start_time = time.time()  # Latency စတင်မှတ်သားခြင်း
     
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(TARGET_URL) as response:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=RAW_HEADERS, timeout=10) as response:
                 
-                if response.status != 200:
-                    await bot.edit_message_text(f"❌ **ERROR:** Gateway returned status `{response.status}`", chat_id, msg_id)
-                    return
-
-                # Total Size တွက်ချက်ခြင်း
-                total_length = int(response.headers.get('Content-Length', 0))
-                total_mb = round(total_length / (1024 * 1024), 2)
-                downloaded = 0
-                last_update_time = time.time()
-
-                # Local File Storage Stream ဖွင့်ခြင်း
-                with open(OUTPUT_FILE, 'wb') as f:
-                    # Chunks များကို စနစ်တကျ Async ပုံစံဖြင့် ဖတ်ခြင်း
-                    async for chunk in response.content.iter_chunked(1024 * 512): # 512KB Chunks
-                        
-                        # stop ဟု ရိုက်ပါက ချက်ချင်း Loop ဖြတ်ချမည်
-                        if is_stopping:
-                            await bot.edit_message_text("⏸️ **DOWNLOAD PROCESS FORCIBLY TERMINATED BY DOMINIC.**\n💾 *Local cluster logs flushed safely.*", chat_id, msg_id)
-                            return
-                        
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            
-                            # Rate Limiting: ၃.၅ စက္ကန့်ခြားမှ Telegram UI ကို Edit မည်
-                            if time.time() - last_update_time > 3.5 or downloaded == total_length:
-                                last_update_time = time.time()
-                                
-                                done = int(20 * downloaded / total_length)
-                                current_mb = round(downloaded / (1024 * 1024), 2)
-                                percentage = round((downloaded / total_length) * 100, 1)
-                                
-                                progress_bar = f"[{'▓' * done}{'░' * (20 - done)}]"
-                                
-                                ui_text = (
-                                    "⚡ **PREMIUM ASYNC DOWNLOAD MATRIX**\n"
-                                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                                    f"📦 **Object Target:** `{OUTPUT_FILE}`\n"
-                                    f"📟 **Progress Core:** `{progress_bar}` `{percentage}%`\n"
-                                    f"📊 **Data Transmitted:** `{current_mb} / {total_mb} MB`\n"
-                                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                                    "🌌 *Status: STREAMING TARGET NODE*"
-                                )
-                                try:
-                                    await bot.edit_message_text(ui_text, chat_id, msg_id, parse_mode="Markdown")
-                                except Exception:
-                                    pass
-                                
-                                # CPU Core ကို အသက်ရှူချောင်စေရန်
-                                await asyncio.sleep(0.01)
-
-                # ပြီးမြောက်သွားပါက အောင်မြင်ကြောင်း UI
-                success_ui = (
-                    "🏁 **DOWNLOAD PROCESS COMPLETED SUCCESSFULLY**\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📦 **Saved Target:** `{OUTPUT_FILE}`\n"
-                    f"📊 **Final Size:** `{total_mb} MB`\n"
-                    f"🟢 **Status:** `FULLY INTEGRATED`\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "🔥 *All network packets flushed safely by Dominic.*"
-                )
-                await bot.edit_message_text(success_ui, chat_id, msg_id, parse_mode="Markdown")
-
+                # Response ရောက်ရန် ကြာမြင့်ချိန် (Latency) ကို မီလီစက္ကန့်ဖြင့် တွက်ခြင်း
+                latency = round((time.time() - start_time) * 1000, 2)
+                
+                if response.status == 200:
+                    raw_ip = await response.text()
+                    
+                    # Network Signal Level Logic
+                    status_indicator = "🟢 EXCELLENT" if latency < 150 else "🟡 DELAYED"
+                    
+                    network_ui = (
+                        "📡 **MOONTON LIVE CONNECTIVITY MATRIX**\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🌐 **Target Host:** `ip.ml.youngjoygame.com:30220`\n"
+                        f"⚡ **Connection Type:** `HTTP/1.1 Keep-Alive`\n"
+                        f"📟 **Detected Server IP:** `{raw_ip.strip()}`\n"
+                        f"⏱️ **Network Latency:** `{latency} ms`\n"
+                        f"📊 **Signal Status:** `{status_indicator}`\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        "🌌 *Diagnostic concluded cleanly by Dominic.*"
+                    )
+                    await bot.edit_message_text(network_ui, message.chat.id, init_msg.message_id, parse_mode="Markdown")
+                else:
+                    await bot.edit_message_text(f"❌ **HANDSHAKE ERROR:** Server returned HTTP `{response.status}`", message.chat.id, init_msg.message_id)
+                    
     except Exception as e:
-        await bot.edit_message_text(f"⚠️ **NETWORK EXCEPTION:** `{str(e)}`", chat_id, msg_id)
+        await bot.edit_message_text(f"⚠️ **SOCKET TIMEOUT:** Moonton core is unreachable.\n`Error: {str(e)}`", message.chat.id, init_msg.message_id)
 
-# --- Chat Interface Commands ---
 
-@dp.message_handler(commands=['start'])
-async def cmd_start(message: types.Message):
-    await message.answer(
-        "⚡ **DOMINIC STANDALONE BOT CORE**\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💬 **Available Text Signals:**\n"
-        "➥ `download` - Execute async asset stream\n"
-        "➥ `stop` - Terminate background loop safely\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📡 *Status: CORE ENGINE READY*", parse_mode="Markdown"
-    )
-
-@dp.message_handler(lambda message: message.text.lower() == 'download')
-async def handle_download(message: types.Message):
-    global download_task
-    
-    if download_task and not download_task.done():
-        await message.answer("💡 **NOTICE:** A downloading process is already active inside the grid.")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎮 ၃။ MLBB PLAYER ID LOOKUP STALKER SYSTEM
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@dp.message_handler(commands=['find', 'stalk'])
+async def stalk_mlbb_player(message: types.Message):
+    args = message.text.split()
+    if len(args) < 3:
+        await message.answer(
+            "💡 **MLBB PLAYER RADAR SYSTEM**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📝 **အသုံးပြုနည်း:** `/find [Game_ID] [Server_ID]`\n"
+            "🔍 **ဥပမာ:** `/find 28483292 2038`"
+        )
         return
-        
-    init_msg = await message.answer("📡 **INITIALIZING ASYNC STREAM ENGINE...**")
-    
-    # Pure Async Background Task အဖြစ် Run သောကြောင့် လုံးဝ Crash မဖြစ်တော့ပါ
-    download_task = asyncio.create_task(download_worker(message.chat.id, init_msg.message_id))
 
-@dp.message_handler(lambda message: message.text.lower() == 'stop')
-async def handle_stop(message: types.Message):
-    global download_task, is_stopping
+    game_id = args[1]
+    server_id = args[2]
     
-    if download_task and not download_task.done():
-        is_stopping = True
-        await message.answer("🛑 **DEPLOYING STOP SIGNAL...** Intercepting download worker thread.")
-    else:
-        await message.answer("💡 **NOTICE:** There are no active downloading nodes running right now.")
+    init_msg = await message.answer("🛰️ **EXTRACTING DATA FROM MOONTON REGISTRY CORE...**")
+    
+    # 🌐 Public Free API End-point (Vanyastore API Gateway)
+    url = f"https://api.vanyastore.com/v1/digital/mlbb?id={game_id}&zone={server_id}"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=12) as response:
+                if response.status == 200:
+                    res_data = await response.json()
+                    
+                    if res_data.get('status') == 200 or 'data' in res_data:
+                        player_data = res_data.get('data', res_data)
+                        nickname = player_data.get('username') or player_data.get('name') or "Not Found"
+                        
+                        if nickname == "Not Found":
+                            await bot.edit_message_text("❌ **ERROR:** Player ID မှားယွင်းနေပါသည်။", message.chat.id, init_msg.message_id)
+                            return
 
+                        profile_ui = (
+                            "🎮 **MLBB ACQUIRED TARGET PROFILE**\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"👤 **In-Game Nickname:** **{nickname}**\n"
+                            f"🆔 **Player ID:** `{game_id}`\n"
+                            f"🌐 **Server ID:** `{server_id}`\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "🟢 *Status: TARGET ACQUIRED CLEANLY*"
+                        )
+                        await bot.edit_message_text(profile_ui, message.chat.id, init_msg.message_id, parse_mode="Markdown")
+                    else:
+                        await bot.edit_message_text("❌ **ERROR:** ကစားသမား အချက်အလက် ရှာမတွေ့ပါ။", message.chat.id, init_msg.message_id)
+                else:
+                    await bot.edit_message_text(f"⚠️ **SERVER REJECTED:** Gateway returned HTTP `{response.status}`", message.chat.id, init_msg.message_id)
+                    
+    except Exception as e:
+        await bot.edit_message_text(f"🛑 **DECRYPT ERROR:** API လိုင်းမကောင်းပါ သို့မဟုတ် Down နေပါသည်။", message.chat.id, init_msg.message_id)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📊 ၄။ MOONTON TELEMETRY PORT 30071 LOG CHECKER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@dp.message_handler(lambda message: message.text.lower() == 'check_report')
+async def test_moonton_report_node(message: types.Message):
+    init_msg = await message.answer("🛰️ **CONNECTING TO MOONTON TELEMETRY REGISTRY...**")
+    
+    url = "https://report.ml.youngjoygame.com:30071"
+    headers = {
+        'Host': 'report.ml.youngjoygame.com:30071',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Android; 13; MLBB)'
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=10) as response:
+                
+                report_ui = (
+                    "📡 **MOONTON LOG REPORTING PORTAL**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🌐 **Gateway Host:** `report.ml.youngjoygame.com`\n"
+                    f"🔌 **Port Node:** `30071`\n"
+                    f"📟 **HTTP Response Status:** `{response.status}`\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🟢 *Status: TELEMETRY NODE REACHABLE*"
+                )
+                await bot.edit_message_text(report_ui, message.chat.id, init_msg.message_id, parse_mode="Markdown")
+                
+    except Exception as e:
+        await bot.edit_message_text(f"⚠️ **REPORT NODE TIMEOUT:**\n`Error: {str(e)}`", message.chat.id, init_msg.message_id)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ⚡ BOT ENGINE EXECUTION
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 if __name__ == '__main__':
-    print("Dominic's 100% Async Bot Core is Online.")
+    print("--- Dominic MLBB Cloud Bot Engine Started Successfully ---")
     executor.start_polling(dp, skip_updates=True)

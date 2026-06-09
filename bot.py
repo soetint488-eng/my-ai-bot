@@ -4,7 +4,7 @@ import time
 import os
 from threading import Thread
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from telebot import types
+from telebot import types, util
 
 # ==================== [ CONFIGURATIONS ] ====================
 BOT_TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
@@ -14,8 +14,9 @@ RAPIDAPI_HOST = "undress-strip-person.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 # ============================================================
 
-# thread_pool_size=1 ကို ဤနေရာ (TeleBot ဆောက်သည့်နေရာ) သို့ ပြောင်းရွှေ့လိုက်ခြင်းဖြင့် Error ကို ဖြေရှင်းပါသည်
-bot = telebot.TeleBot(BOT_TOKEN, thread_pool_size=1)
+# Version 4.34.0 အတွက် thread_pool_size နေရာတွင် util.WorkerPool သုံးပြီး စက်ငြိမ်အောင် ထိန်းခြင်း
+patched_threaded_pool = util.WorkerPool(num_threads=1)
+bot = telebot.TeleBot(BOT_TOKEN, num_threads=1)
 
 # --- Render ရဲ့ Timed Out / Port Error ကို ကျော်ရန် Fake Web Server ---
 class HealthCheckServer(BaseHTTPRequestHandler):
@@ -93,5 +94,4 @@ if __name__ == "__main__":
     time.sleep(2)
     
     print("🤖 Undress AI Bot စတင်ပွင့်နေပါပြီ...")
-    # Error ဖြစ်စေသော parameter များကို ဖယ်ရှားပြီး ရိုးရိုးရှင်းရှင်းပဲ ခေါ်လိုက်ပါသည်
     bot.infinity_polling()

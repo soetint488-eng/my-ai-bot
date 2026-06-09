@@ -2,16 +2,13 @@ import telebot
 import requests
 
 # ==================== [ CONFIGURATIONS ] ====================
-# အစ်ကိုပေးထားတဲ့ Bot Token ကို တိုက်ရိုက် ထည့်သွင်းထားပါတယ်
 BOT_TOKEN = "8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk"
 
-# RapidAPI Settings (By Kaia API Endpoint များနှင့် အစ်ကို့ Key)
 RAPIDAPI_URL = "https://mobile-legends-nickname-region-checker.p.rapidapi.com/mobile-legends"
 RAPIDAPI_HOST = "mobile-legends-nickname-region-checker.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 # ============================================================
 
-# Bot ကို Token ဖြင့် တည်ဆောက်ခြင်း
 bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start'])
@@ -28,24 +25,20 @@ def start_cmd(message):
 def check_mlbb_nickname(message):
     user_input = message.text.strip()
     
-    # Input Format မှန်မမှန် စစ်ဆေးခြင်း
     if "|" not in user_input:
         bot.reply_to(message, "❌ ပုံစံမမှန်ကန်ပါ။ ကျေးဇူးပြု၍ `ID|Zone` ပုံစံအတိုင်း ပို့ပေးပါဗျာ။\nဥပမာ - `114935204|2576`")
         return
 
-    # ID နှင့် Zone ခွဲထုတ်ခြင်း
     try:
         user_id, zone_id = user_input.split("|")
         user_id = user_id.strip()
         zone_id = zone_id.strip()
     except Exception:
-        bot.reply_to(message, "❌ စာသားခွဲထုတ်ရာတွင် မှားယွင်းနေပါသည်။ `ID|Zone` ပုံစံကို သေချာပြန်စစ်ပေးပါ။")
+        bot.reply_to(message, "❌ စာသားခွဲထုတ်ရာတွင် မှားယွင်းနေပါသည်။ `ID|Zone` ပုံစံကို သေჩာပြန်စစ်ပေးပါ။")
         return
 
-    # စောင့်ခိုင်းသည့် မက်ဆေ့ခ်ျ ပို့ခြင်း
     status_msg = bot.reply_to(message, "🔎 MLBB Nickname ကို လှမ်းစစ်ပေးနေပါပြီ။ ခေတ္တစောင့်ပါ...")
 
-    # RapidAPI ထံ ပို့မည့် Headers နှင့် Payload Data
     headers = {
         "Content-Type": "application/json",
         "x-rapidapi-host": RAPIDAPI_HOST,
@@ -58,18 +51,15 @@ def check_mlbb_nickname(message):
     }
 
     try:
-        # RapidAPI သို့ POST Request ပို့ခြင်း
         response = requests.post(RAPIDAPI_URL, json=payload, headers=headers)
         
         if response.status_code == 200:
             result = response.json()
             
-            # API ကနေ ပြန်ပေးတဲ့ Response ပေါ်မူတည်ပြီး ဒေတာဆွဲထုတ်ခြင်း
-            # By Kaia API ရဲ့ response structure အတိုင်း စစ်ထားပေးပါတယ်
-            nickname = (result.get("nickname") or result.get("username") or 
-                        result.get("name") or result.get("data", {}).get("username"))
-            
-            region = result.get("region") or result.get("zone") or result.get("country")
+            # API Response Structure အသစ်အရ ဒေတာ ဆွဲထုတ်ခြင်း
+            api_data = result.get("data", {})
+            nickname = api_data.get("nickname")
+            region = api_data.get("region")
 
             if nickname:
                 response_text = (
@@ -85,8 +75,7 @@ def check_mlbb_nickname(message):
                 
                 bot.edit_message_text(response_text, chat_id=message.chat.id, message_id=status_msg.message_id, parse_mode="Markdown")
             else:
-                # အကောင့် ရှာမတွေ့ခဲ့လျှင် သို့မဟုတ် API ဒေတာ ပုံစံပြောင်းနေလျှင် Raw response ပြပေးမည်
-                bot.edit_message_text(f"⚠️ ရှာမတွေ့ပါ သို့မဟုတ် Response မမှန်ပါ။\n**API Return:** `{response.text}`", 
+                bot.edit_message_text(f"⚠️ ရှာမတွေ့ပါ သို့မဟုတ် ဒေတာ ဆွဲမထုတ်နိုင်ပါ။\n**Response:** `{response.text}`", 
                                       chat_id=message.chat.id, message_id=status_msg.message_id, parse_mode="Markdown")
         else:
             bot.edit_message_text(f"❌ API Error ဖြစ်သွားပါပြီ။\nStatus Code: {response.status_code}\nMessage: {response.text}", 

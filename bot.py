@@ -6,7 +6,6 @@ from telebot import types
 # ==================== [ CONFIGURATIONS ] ====================
 BOT_TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
 
-# အစ်ကိုပေးထားသော Face Pretty API အချက်အလက်များ
 RAPIDAPI_URL = "https://photo-retouching.p.rapidapi.com/huoshan/facebody/facepretty"
 RAPIDAPI_HOST = "photo-retouching.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
@@ -23,49 +22,48 @@ def start_cmd(message):
     )
     bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
-# User ဆီမှ ဓာတ်ပုံလှမ်းဖမ်းသည့် Handler
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    # အခြေအနေပြ စာသားအရင်ပို့ခြင်း
-    status_msg = bot.reply_to(message, "⏳ ဓာတ်ပုံကို ရယူနေပါပြီ... ခေတ္တစောင့်ပါဗျာ။")
+    status_msg = bot.reply_to(message, "⏳ ဓာတ်ပုံဒေတာကို ရယူနေပါပြီ... ခေတ္တစောင့်ပါဗျာ။")
     
     try:
-        # ၁။ Telegram Server ပေါ်မှ ပုံရဲ့ Direct URL လင့်ခ်ကို ဆွဲထုတ်ခြင်း
+        # ၁။ Telegram Server မှ ဓာတ်ပုံဖိုင်ကို Bytes အဖြစ် တိုက်ရိုက်ဒေါင်းလုဒ်ဆွဲခြင်း
         file_info = bot.get_file(message.photo[-1].file_id)
-        telegram_img_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
+        downloaded_file = bot.download_file(file_info.file_path)
         
         bot.edit_message_text("🪄 AI က မျက်နှာကို အလှပြင်ပေးနေပါပြီ...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
-        # ၂။ API သို့ ပေးပို့ရန် ချက်ပြုတ်ခြင်း (cURL အတိုင်း)
+        # ၂။ API သို့ လင့်ခ်အစား ဖိုင်အဖြစ် ပို့ရန် headers ကို ပြင်ဆင်ခြင်း
+        # Content-Type ကို requests က အလိုအလျောက် သတ်မှတ်ပေးရန် ဖြုတ်ထားရပါမည်
         headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
             "x-rapidapi-host": RAPIDAPI_HOST,
             "x-rapidapi-key": RAPIDAPI_KEY
         }
         
-        # User ပို့လိုက်တဲ့ ပုံလင့်ခ်ကို image_target ထဲ ထည့်လိုက်ခြင်း
-        payload = {
-            "image_target": telegram_img_url,
-            "multi_face": "undefined",
-            "beauty_level": 3 # အလှပြင်နှုန်းကို သိသာအောင် Level 3 အထိ မြှင့်ထားပေးပါတယ် (1-5 ကြိုက်သလိုပြောင်းနိုင်သည်)
+        # ဓာတ်ပုံဖိုင်ဒေတာကို image_target ထဲသို့ ထည့်ခြင်း
+        files = {
+            "image_target": ("image.jpg", downloaded_file, "image/jpeg")
         }
         
-        # ၃။ API ထံ POST Request ဖြင့် ပို့ခြင်း
-        response = requests.post(RAPIDAPI_URL, headers=headers, data=payload)
+        # အခြား Parameter များကို data ထဲတွင် ပို့ခြင်း
+        payload = {
+            "multi_face": "undefined",
+            "beauty_level": "3" # String ပုံစံဖြင့် လွှဲပေးလိုက်ပါသည်
+        }
+        
+        # ၃။ API ထံ POST Request ဖြင့် ဖိုင်ကိုပါ ပူးတွဲပို့ခြင်း
+        response = requests.post(RAPIDAPI_URL, headers=headers, data=payload, files=files)
         
         if response.status_code == 200:
             result = response.json()
             
-            # API က ပေးလေ့ရှိတဲ့ response json format အလိုက် ဆွဲထုတ်ခြင်း
-            # (ပုံမှန်အားဖြင့် data သို့မဟုတ် result အောက်က url ထဲမှာ လင့်ခ်အသစ် လာတတ်ပါတယ်)
+            # API ရဲ့ JSON Format အလိုက် ပုံလင့်ခ်အသစ် ဆွဲထုတ်ခြင်း
             data_obj = result.get("data", {})
             ai_img_url = data_obj.get("url") or result.get("url") or data_obj.get("image_url")
             
             if ai_img_url:
-                # စောင့်ခိုင်းထားတဲ့ မက်ဆေ့ခ်ျကို ဖျက်ခြင်း
                 bot.delete_message(chat_id=message.chat.id, message_id=status_msg.message_id)
                 
-                # ပြင်ပြီးသား ပုံအသစ်ကို User ထံ ပြန်ပို့ပေးခြင်း
                 bot.send_photo(
                     chat_id=message.chat.id,
                     photo=ai_img_url,
@@ -93,7 +91,7 @@ def handle_photo(message):
 if __name__ == "__main__":
     print("🧹 Cleaning old bot connections...")
     bot.remove_webhook()
-    time.sleep(1)
+    time.sleep(2)
     
     print("🤖 AI Face Beauty Bot စတင်ပွင့်နေပါပြီ...")
-    bot.infinity_polling()
+    bot.infinity_polling(timeout=10, long_polling_timeout=5, allowed_updates=[], thread_pool_size=1)

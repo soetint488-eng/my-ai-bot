@@ -6,9 +6,9 @@ from telebot import types
 # ==================== [ CONFIGURATIONS ] ====================
 BOT_TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
 
-# URL ကို အနောက်က api/get-nude ဖြုတ်ပြီး Home URL အမှန်အတိုင်း ပြန်ပြင်ထားပါတယ်
-RAPIDAPI_URL = "https://porn-image.p.rapidapi.com/"
-RAPIDAPI_HOST = "porn-image.p.rapidapi.com"
+# အစ်ကိုပေးထားသော cURL အတိုင်း Host နှင့် URL ကို လုံးဝအမှန်ပြင်ထားပါသည်
+RAPIDAPI_URL = "https://porn-image1.p.rapidapi.com/"
+RAPIDAPI_HOST = "porn-image1.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 # ============================================================
 
@@ -16,9 +16,11 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 def get_nsfw_keyboard():
     markup = types.InlineKeyboardMarkup(row_width=2)
+    # API တွင် စမ်းသပ်အောင်မြင်ထားသော ပုံစံများအတိုင်း ခလုတ်လုပ်ခြင်း
     btn1 = types.InlineKeyboardButton("🍒 Boobs", callback_data="nsfw_boobs")
     btn2 = types.InlineKeyboardButton("🍑 Ass", callback_data="nsfw_ass")
-    markup.add(btn1, btn2)
+    btn3 = types.InlineKeyboardButton("🐱 Pussy", callback_data="nsfw_pussy")
+    markup.add(btn1, btn2, btn3)
     return markup
 
 @bot.message_handler(commands=['start'])

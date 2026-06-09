@@ -1,12 +1,13 @@
 import telebot
 import requests
+import time
 from telebot import types
 
 # ==================== [ CONFIGURATIONS ] ====================
 BOT_TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
 
-# Screenshot ပါ အချက်အလက်များအရ လင့်ခ်နှင့် Host ကို အမှန်ပြင်ထားပါသည်
-RAPIDAPI_URL = "https://porn-image.p.rapidapi.com/api/get-nude"
+# URL ကို အနောက်က api/get-nude ဖြုတ်ပြီး Home URL အမှန်အတိုင်း ပြန်ပြင်ထားပါတယ်
+RAPIDAPI_URL = "https://porn-image.p.rapidapi.com/"
 RAPIDAPI_HOST = "porn-image.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 # ============================================================
@@ -15,7 +16,6 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 def get_nsfw_keyboard():
     markup = types.InlineKeyboardMarkup(row_width=2)
-    # API ရဲ့ type ပေါ်မူတည်ပြီး ခလုတ်များကို ပြင်ဆင်နိုင်သည်
     btn1 = types.InlineKeyboardButton("🍒 Boobs", callback_data="nsfw_boobs")
     btn2 = types.InlineKeyboardButton("🍑 Ass", callback_data="nsfw_ass")
     markup.add(btn1, btn2)
@@ -53,7 +53,6 @@ def handle_nsfw_requests(call):
             )
             return
 
-        # JSON ထဲမှ 'url' ကို တိုက်ရိုက်ဆွဲထုတ်ခြင်း
         result = response.json()
         img_url = result.get("url")
 
@@ -83,5 +82,9 @@ def handle_nsfw_requests(call):
         )
 
 if __name__ == "__main__":
+    print("🧹 Cleaning old bot connections...")
+    bot.remove_webhook()
+    time.sleep(1)
+    
     print("🤖 NSFW Image Bot စတင်ပွင့်နေပါပြီ...")
-    bot.infinity_polling()
+    bot.infinity_polling(non_stop=True)

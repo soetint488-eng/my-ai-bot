@@ -3,7 +3,7 @@ import requests
 
 # ==================== [ CONFIGURATIONS ] ====================
 # BotFather ကပေးတဲ့ Bot Token တစ်ခုတည်းကိုပဲ ဒီမှာ ထည့်ပေးပါ
-BOT_TOKEN = "သင့်ရဲ့_bot_token_ကို_ဒီမှာထည့်ပါ"
+BOT_TOKEN = "8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk"
 
 # RapidAPI Settings (အစ်ကိုပေးထားတဲ့ Keys များနှင့် အချက်အလက်များ)
 RAPIDAPI_URL = "https://mobile-legends-nickname-region-checker.p.rapidapi.com/mobile-legends"

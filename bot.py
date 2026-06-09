@@ -14,9 +14,10 @@ RAPIDAPI_HOST = "undress-strip-person.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 # ============================================================
 
-bot = telebot.TeleBot(BOT_TOKEN)
+# thread_pool_size=1 ကို ဤနေရာ (TeleBot ဆောက်သည့်နေရာ) သို့ ပြောင်းရွှေ့လိုက်ခြင်းဖြင့် Error ကို ဖြေရှင်းပါသည်
+bot = telebot.TeleBot(BOT_TOKEN, thread_pool_size=1)
 
-# --- Render ရဲ့ Timed Out / Port Error ကို ကျော်ရန် Fake Web Server ဆောက်ခြင်း ---
+# --- Render ရဲ့ Timed Out / Port Error ကို ကျော်ရန် Fake Web Server ---
 class HealthCheckServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -25,7 +26,6 @@ class HealthCheckServer(BaseHTTPRequestHandler):
         self.wfile.write(b"Bot is Running Alive!")
 
 def run_health_server():
-    # Render သည် Environment Variable အနေဖြင့် PORT ကို ပေးလေ့ရှိသည်၊ မရှိပါက 8080 သုံးမည်
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), HealthCheckServer)
     print(f"🌍 Fake Web Server started on port {port}")
@@ -82,16 +82,16 @@ def handle_photo(message):
         bot.edit_message_text(f"❌ Error ဖြစ်ပွားသွားသည် - {str(e)}", chat_id=message.chat.id, message_id=status_msg.message_id)
 
 if __name__ == "__main__":
-    # ၁။ Render ရဲ့ Port Timeout ကျော်ရန် Web Server ကို Thread ခွဲပြီး အရင်မောင်းခြင်း
+    # ၁။ Fake Web Server မောင်းနှင်ခြင်း
     server_thread = Thread(target=run_health_server)
     server_thread.daemon = True
     server_thread.start()
 
-    # ၂။ Conflict 409 မဖြစ်စေရန် အဟောင်းများကို တိုက်ရိုက် ဖျက်ထုတ်ခြင်း
+    # ၂။ ရှင်းလင်းရေး လုပ်ဆောင်ခြင်း
     print("🧹 Cleaning old bot connections...")
     bot.remove_webhook()
-    time.sleep(3) # စက်ဟောင်း အရှိန်သေသွားအောင် ၃ စက္ကန့် စောင့်ခိုင်းခြင်း
+    time.sleep(2)
     
     print("🤖 Undress AI Bot စတင်ပွင့်နေပါပြီ...")
-    # thread_pool_size=1 ကန့်သတ်ခြင်းဖြင့် Render ပေါ်တွင် Conflict ဖြစ်ခြင်းကို အပြီးတိုင် တားဆီးပါသည်
-    bot.infinity_polling(timeout=20, long_polling_timeout=10, allowed_updates=[], thread_pool_size=1)
+    # Error ဖြစ်စေသော parameter များကို ဖယ်ရှားပြီး ရိုးရိုးရှင်းရှင်းပဲ ခေါ်လိုက်ပါသည်
+    bot.infinity_polling()

@@ -6,7 +6,7 @@ from telebot import types
 # ==================== [ CONFIGURATIONS ] ====================
 BOT_TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
 
-# အစ်ကိုပေးထားသော cURL အတိုင်း Host နှင့် URL ကို လုံးဝအမှန်ပြင်ထားပါသည်
+# အစ်ကို့အကောင့်နှင့် အလုပ်လုပ်သော API Host နှင့် URL
 RAPIDAPI_URL = "https://porn-image1.p.rapidapi.com/"
 RAPIDAPI_HOST = "porn-image1.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
@@ -16,7 +16,6 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 def get_nsfw_keyboard():
     markup = types.InlineKeyboardMarkup(row_width=2)
-    # API တွင် စမ်းသပ်အောင်မြင်ထားသော ပုံစံများအတိုင်း ခလုတ်လုပ်ခြင်း
     btn1 = types.InlineKeyboardButton("🍒 Boobs", callback_data="nsfw_boobs")
     btn2 = types.InlineKeyboardButton("🍑 Ass", callback_data="nsfw_ass")
     btn3 = types.InlineKeyboardButton("🐱 Pussy", callback_data="nsfw_pussy")
@@ -89,4 +88,5 @@ if __name__ == "__main__":
     time.sleep(1)
     
     print("🤖 NSFW Image Bot စတင်ပွင့်နေပါပြီ...")
-    bot.infinity_polling(non_stop=True)
+    # အမှားဖြစ်စေသော non_stop=True ကို ဖြုတ်ထားပေးပါတယ်
+    bot.infinity_polling()

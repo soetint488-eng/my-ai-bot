@@ -2,6 +2,7 @@ import telebot
 import requests
 import time
 import os
+import base64
 from threading import Thread
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from telebot import types
@@ -14,7 +15,6 @@ RAPIDAPI_HOST = "undress-strip-person.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 # ============================================================
 
-# စက်ငြိမ်စေရန်အတွက် ဗားရှင်းအသစ်၏ တရားဝင် parameter ဖြစ်သော num_threads=1 ကိုသာ သုံးပါသည်
 bot = telebot.TeleBot(BOT_TOKEN, num_threads=1)
 
 # --- Render ရဲ့ Timed Out / Port Error ကို ကျော်ရန် Fake Web Server ---
@@ -45,34 +45,44 @@ def handle_photo(message):
     status_msg = bot.reply_to(message, "⏳ ဓာတ်ပုံဒေတာကို ရယူနေပါပြီ... ခေတ္တစောင့်ပါဗျာ။")
     
     try:
+        # ၁။ Telegram Server မှ ဓာတ်ပုံဖိုင်ကို ဒေါင်းလုဒ်ဆွဲခြင်း
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
-        telegram_img_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
         
         bot.edit_message_text("🪄 AI စနစ်ဖြင့် ပုံကို ပြုပြင်နေပါပြီ... (စက္ကန့်အနည်းငယ် ကြာနိုင်ပါသည်)", chat_id=message.chat.id, message_id=status_msg.message_id)
         
+        # ၂။ ဓာတ်ပုံဖိုင်ကို Base64 String သို့ ပြောင်းလဲခြင်း
+        base64_image = base64.b64encode(downloaded_file).decode('utf-8')
+        
+        # ၃။ API သို့ ပို့ရန် အချက်အလက်များ ပြင်ဆင်ခြင်း
         headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
             "x-rapidapi-host": RAPIDAPI_HOST,
             "x-rapidapi-key": RAPIDAPI_KEY
         }
         
-        payload = {"image": telegram_img_url}
-        files = {"image": ("image.jpg", downloaded_file, "image/jpeg")}
+        # image parameter ထဲသို့ base64 string ကို ထည့်သွင်းခြင်း
+        payload = {
+            "image": base64_image
+        }
         
-        # ပထမဦးစွာ ဖိုင်အလိုက် ပို့ကြည့်ပါမည်
-        response = requests.post(RAPIDAPI_URL, headers=headers, data=payload, files=files)
-        
-        if response.status_code != 200:
-            headers["Content-Type"] = "application/x-www-form-urlencoded"
-            response = requests.post(RAPIDAPI_URL, headers=headers, data=payload)
+        # ၄။ API ထံ POST Request ဖြင့် ပို့ခြင်း
+        response = requests.post(RAPIDAPI_URL, headers=headers, data=payload)
 
         if response.status_code == 200:
             result = response.json()
+            
+            # API မှ ပြန်ပေးလေ့ရှိသော key နာမည်များအတိုင်း ရှာဖွေခြင်း
             ai_img_url = result.get("url") or result.get("image_url") or result.get("data", {}).get("url") or result.get("output")
             
             if ai_img_url:
                 bot.delete_message(chat_id=message.chat.id, message_id=status_msg.message_id)
-                bot.send_photo(chat_id=message.chat.id, photo=ai_img_url, caption="✨ **AI ပြုပြင်ပြီးသားပုံ ရပါပြီဗျာ။**", reply_to_message_id=message.message_id)
+                bot.send_photo(
+                    chat_id=message.chat.id, 
+                    photo=ai_img_url, 
+                    caption="✨ **AI ပြုပြင်ပြီးသားပုံ ရပါပြီဗျာ။**", 
+                    reply_to_message_id=message.message_id
+                )
             else:
                 bot.edit_message_text(f"⚠️ API အလုပ်လုပ်သော်လည်း ပုံလင့်ခ် ရှာမတွေ့ပါ။\n**Response:** `{response.text[:300]}`", chat_id=message.chat.id, message_id=status_msg.message_id)
         else:
@@ -82,12 +92,12 @@ def handle_photo(message):
         bot.edit_message_text(f"❌ Error ဖြစ်ပွားသွားသည် - {str(e)}", chat_id=message.chat.id, message_id=status_msg.message_id)
 
 if __name__ == "__main__":
-    # ၁။ Fake Web Server မောင်းနှင်ခြင်း
+    # Fake Web Server မောင်းနှင်ခြင်း
     server_thread = Thread(target=run_health_server)
     server_thread.daemon = True
     server_thread.start()
 
-    # ၂။ ရှင်းလင်းရေး လုပ်ဆောင်ခြင်း
+    # ရှင်းလင်းရေး လုပ်ဆောင်ခြင်း
     print("🧹 Cleaning old bot connections...")
     bot.remove_webhook()
     time.sleep(2)

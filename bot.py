@@ -1,89 +1,82 @@
 import telebot
 import requests
+from telebot import types
 
 # ==================== [ CONFIGURATIONS ] ====================
+# အစ်ကို့ရဲ့ Telegram Bot Token
 BOT_TOKEN = "8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk"
 
-RAPIDAPI_URL = "https://mobile-legends-nickname-region-checker.p.rapidapi.com/mobile-legends"
-RAPIDAPI_HOST = "mobile-legends-nickname-region-checker.p.rapidapi.com"
+# API Configurations (အစ်ကိုပေးထားတဲ့ Keys များနှင့် အချက်အလက်များ)
+RAPIDAPI_URL = "https://girls-nude-image.p.rapidapi.com/"
+RAPIDAPI_HOST = "girls-nude-image.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 # ============================================================
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# ခလုတ်များ ဖန်တီးပေးမည့် Function
+def get_nsfw_keyboard():
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    # Callback Data သတ်မှတ်ပြီး ခလုတ်များ ပြုလုပ်ခြင်း
+    btn1 = types.InlineKeyboardButton("🍒 Boobs", callback_data="nsfw_boobs")
+    btn2 = types.InlineKeyboardButton("🍑 Ass", callback_data="nsfw_ass")
+    markup.add(btn1, btn2)
+    return markup
+
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     welcome_text = (
-        "👋 မင်္ဂလာပါဗျာ! MLBB Nickname Checker Bot မှ ကြိုဆိုပါတယ်။\n\n"
-        "စစ်ဆေးလိုသော Player ID နှင့် Zone ID ကို အောက်ပါပုံစံအတိုင်း ရိုက်ပို့ပေးပါဗျာ။\n\n"
-        "📌 ပုံစံ - `ID|Zone`\n"
-        "📝 ဥပမာ - `114935204|2576`"
+        "🔞 **NSFW Image Bot မှ ကြိုဆိုပါတယ်** 🔞\n\n"
+        "အောက်ပါ ခလုတ်များကို နှိပ်ပြီး သင်ကြည့်ရှုလိုသော ကျပန်း (Random) NSFW ရုပ်ပုံများကို တောင်းယူနိုင်ပါတယ်ဗျာ။"
     )
-    bot.reply_to(message, welcome_text, parse_mode="Markdown")
+    bot.reply_to(message, welcome_text, reply_markup=get_nsfw_keyboard(), parse_mode="Markdown")
 
-@bot.message_handler(func=lambda message: True)
-def check_mlbb_nickname(message):
-    user_input = message.text.strip()
+# Inline ခလုတ်နှိပ်ခြင်းကို ဖမ်းယူသည့် Handler
+@bot.callback_query_handler(func=lambda call: call.data.startswith("nsfw_"))
+def handle_nsfw_requests(call):
+    # ခလုတ်အလိုက် ပုံစံခွဲခြားခြင်း (boobs သို့မဟုတ် ass)
+    img_type = call.data.replace("nsfw_", "")
     
-    if "|" not in user_input:
-        bot.reply_to(message, "❌ ပုံစံမမှန်ကန်ပါ။ ကျေးဇူးပြု၍ `ID|Zone` ပုံစံအတိုင်း ပို့ပေးပါဗျာ။\nဥပမာ - `114935204|2576`")
-        return
-
-    try:
-        user_id, zone_id = user_input.split("|")
-        user_id = user_id.strip()
-        zone_id = zone_id.strip()
-    except Exception:
-        bot.reply_to(message, "❌ စာသားခွဲထုတ်ရာတွင် မှားယွင်းနေပါသည်။ `ID|Zone` ပုံစံကို သေჩာပြန်စစ်ပေးပါ။")
-        return
-
-    status_msg = bot.reply_to(message, "🔎 MLBB Nickname ကို လှမ်းစစ်ပေးနေပါပြီ။ ခေတ္တစောင့်ပါ...")
-
+    # User ကို ခေတ္တစောင့်ရန် loading ပြခြင်း
+    bot.answer_callback_query(call.id, text="🔄 ပုံဆွဲထုတ်နေပါတယ်... ခေတ္တစောင့်ပါ")
+    
+    # API တောင်းရန် ချက်ပြုတ်ခြင်း
     headers = {
         "Content-Type": "application/json",
         "x-rapidapi-host": RAPIDAPI_HOST,
         "x-rapidapi-key": RAPIDAPI_KEY
     }
-    
-    payload = {
-        "user_id": user_id,
-        "zone_id": zone_id
-    }
+    querystring = {"type": img_type}
 
     try:
-        response = requests.post(RAPIDAPI_URL, json=payload, headers=headers)
+        # API ထံမှ GET Request ဖြင့် ဒေတာလှမ်းတောင်းခြင်း
+        response = requests.get(RAPIDAPI_URL, headers=headers, params=querystring)
         
         if response.status_code == 200:
             result = response.json()
             
-            # API Response Structure အသစ်အရ ဒေတာ ဆွဲထုတ်ခြင်း
-            api_data = result.get("data", {})
-            nickname = api_data.get("nickname")
-            region = api_data.get("region")
-
-            if nickname:
-                response_text = (
-                    "🎮 **MLBB Account Found!** 🎮\n"
-                    "━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 **Nickname:** `{nickname}`\n"
-                    f"🆔 **Player ID:** `{user_id}`\n"
-                    f"🌐 **Zone ID:** `{zone_id}`\n"
+            # API က ပေးလေ့ရှိတဲ့ response format အလိုက် ရုပ်ပုံလင့်ခ်ကို ဆွဲထုတ်ခြင်း
+            # ပုံမှန်အားဖြင့် 'url', 'image', 'link' သို့မဟုတ် 'data' အနေနဲ့ လာတတ်ပါတယ်
+            img_url = result.get("url") or result.get("link") or result.get("image") or result.get("data")
+            
+            if img_url:
+                # ဓာတ်ပုံကို Telegram ထံ တိုက်ရိုက်ပို့ခြင်း
+                bot.send_photo(
+                    chat_id=call.message.chat.id,
+                    photo=img_url,
+                    caption=f"🔞 Type: **{img_type.capitalize()}**",
+                    reply_markup=get_nsfw_keyboard(), # ခလုတ်ကို အောက်မှာ ဆက်ပြထားပေးမည်
+                    parse_mode="Markdown"
                 )
-                if region:
-                    response_text += f"📍 **Region:** `{region}`\n"
-                response_text += "━━━━━━━━━━━━━━━━━━━"
-                
-                bot.edit_message_text(response_text, chat_id=message.chat.id, message_id=status_msg.message_id, parse_mode="Markdown")
             else:
-                bot.edit_message_text(f"⚠️ ရှာမတွေ့ပါ သို့မဟုတ် ဒေတာ ဆွဲမထုတ်နိုင်ပါ။\n**Response:** `{response.text}`", 
-                                      chat_id=message.chat.id, message_id=status_msg.message_id, parse_mode="Markdown")
+                # ဒေတာရှိသော်လည်း ပုံလင့်ခ် ရှာမတွေ့လျှင် Raw text အဖြစ်ပြမည်
+                bot.send_message(call.message.chat.id, f"⚠️ API Response မှ ရုပ်ပုံလင့်ခ် ရှာမတွေ့ပါ။\n**Return:** `{response.text}`")
         else:
-            bot.edit_message_text(f"❌ API Error ဖြစ်သွားပါပြီ။\nStatus Code: {response.status_code}\nMessage: {response.text}", 
-                                  chat_id=message.chat.id, message_id=status_msg.message_id)
-
+            bot.send_message(call.message.chat.id, f"❌ API Error - Status Code: {response.status_code}\nMessage: {response.text}")
+            
     except Exception as e:
-        bot.edit_message_text(f"❌ Error ဖြစ်ပွားသွားသည် - {str(e)}", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.send_message(call.message.chat.id, f"❌ Error တစ်ခုခု ဖြစ်ပွားသွားသည် - {str(e)}")
 
 if __name__ == "__main__":
-    print("🤖 Telebot MLBB Checker Bot စတင်ပွင့်နေပါပြီ...")
+    print("🤖 NSFW Image Bot စတင်ပွင့်နေပါပြီ...")
     bot.infinity_polling()

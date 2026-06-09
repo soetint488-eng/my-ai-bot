@@ -2,22 +2,22 @@ import telebot
 import requests
 
 # ==================== [ CONFIGURATIONS ] ====================
-# BotFather ကပေးတဲ့ Bot Token တစ်ခုတည်းကိုပဲ ဒီမှာ ထည့်ပေးပါ
+# အစ်ကိုပေးထားတဲ့ Bot Token ကို တိုက်ရိုက် ထည့်သွင်းထားပါတယ်
 BOT_TOKEN = "8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk"
 
-# RapidAPI Settings (အစ်ကိုပေးထားတဲ့ Keys များနှင့် အချက်အလက်များ)
+# RapidAPI Settings (By Kaia API Endpoint များနှင့် အစ်ကို့ Key)
 RAPIDAPI_URL = "https://mobile-legends-nickname-region-checker.p.rapidapi.com/mobile-legends"
-RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 RAPIDAPI_HOST = "mobile-legends-nickname-region-checker.p.rapidapi.com"
+RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 # ============================================================
 
-# Bot ကို Token တစ်ခုတည်းဖြင့် တည်ဆောက်ခြင်း
+# Bot ကို Token ဖြင့် တည်ဆောက်ခြင်း
 bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     welcome_text = (
-        "👋 မင်္ဂလာပါဗျာ! ကျွန်တော်ကတော့ MLBB Nickname Checker Bot ဖြစ်ပါတယ်။\n\n"
+        "👋 မင်္ဂလာပါဗျာ! MLBB Nickname Checker Bot မှ ကြိုဆိုပါတယ်။\n\n"
         "စစ်ဆေးလိုသော Player ID နှင့် Zone ID ကို အောက်ပါပုံစံအတိုင်း ရိုက်ပို့ပေးပါဗျာ။\n\n"
         "📌 ပုံစံ - `ID|Zone`\n"
         "📝 ဥပမာ - `114935204|2576`"
@@ -64,8 +64,8 @@ def check_mlbb_nickname(message):
         if response.status_code == 200:
             result = response.json()
             
-            # API Response ထဲက ကျလာမည့် ဒေတာများကို ဆွဲထုတ်ခြင်း
-            # API အလိုက် response key မတူနိုင်သဖြင့် စုံအောင် စစ်ထားပေးပါတယ်
+            # API ကနေ ပြန်ပေးတဲ့ Response ပေါ်မူတည်ပြီး ဒေတာဆွဲထုတ်ခြင်း
+            # By Kaia API ရဲ့ response structure အတိုင်း စစ်ထားပေးပါတယ်
             nickname = (result.get("nickname") or result.get("username") or 
                         result.get("name") or result.get("data", {}).get("username"))
             

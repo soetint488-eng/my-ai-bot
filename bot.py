@@ -4,8 +4,10 @@ from telebot import types
 
 # ==================== [ CONFIGURATIONS ] ====================
 BOT_TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
-RAPIDAPI_URL = "https://girls-nude-image.p.rapidapi.com/"
-RAPIDAPI_HOST = "girls-nude-image.p.rapidapi.com"
+
+# Screenshot ပါ အချက်အလက်များအရ လင့်ခ်နှင့် Host ကို အမှန်ပြင်ထားပါသည်
+RAPIDAPI_URL = "https://porn-image.p.rapidapi.com/api/get-nude"
+RAPIDAPI_HOST = "porn-image.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 # ============================================================
 
@@ -13,6 +15,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 def get_nsfw_keyboard():
     markup = types.InlineKeyboardMarkup(row_width=2)
+    # API ရဲ့ type ပေါ်မူတည်ပြီး ခလုတ်များကို ပြင်ဆင်နိုင်သည်
     btn1 = types.InlineKeyboardButton("🍒 Boobs", callback_data="nsfw_boobs")
     btn2 = types.InlineKeyboardButton("🍑 Ass", callback_data="nsfw_ass")
     markup.add(btn1, btn2)
@@ -30,10 +33,7 @@ def start_cmd(message):
 def handle_nsfw_requests(call):
     img_type = call.data.replace("nsfw_", "")
     
-    # ခလုတ်နှိပ်လိုက်ရင် Loading လည်နေတာကို ပျောက်အောင် အရင်လုပ်ခြင်း
     bot.answer_callback_query(call.id, text="🔄 ပုံရှာနေပါပြီ...")
-    
-    # ဘာ Error တက်လဲ သိရအောင် စောင့်ကြည့်မည့် မက်ဆေ့ခ်ျ အရင်ပို့ထားမည်
     status_msg = bot.send_message(call.message.chat.id, "⏳ API ထံမှ ပုံဆွဲထုတ်နေဆဲ...")
     
     headers = {
@@ -45,7 +45,6 @@ def handle_nsfw_requests(call):
     try:
         response = requests.get(RAPIDAPI_URL, headers=headers, params=querystring)
         
-        # အကယ်၍ Subscribe မလုပ်ရသေးရင် သို့မဟုတ် Error တက်ရင် တန်းပြပေးရန်
         if response.status_code != 200:
             bot.edit_message_text(
                 f"❌ API Error ဖြစ်သွားပါပြီ။\nStatus Code: {response.status_code}\nMessage: {response.text}",
@@ -54,21 +53,11 @@ def handle_nsfw_requests(call):
             )
             return
 
-        img_url = None
-        raw_text = response.text.strip()
+        # JSON ထဲမှ 'url' ကို တိုက်ရိုက်ဆွဲထုတ်ခြင်း
+        result = response.json()
+        img_url = result.get("url")
 
-        # ၁။ API က JSON ပုံစံနဲ့ ပြန်ပေးခဲ့ရင် ဆွဲထုတ်နည်း
-        try:
-            result = response.json()
-            img_url = result.get("url") or result.get("link") or result.get("image") or result.get("data")
-        except Exception:
-            # ၂။ JSON မဟုတ်ဘဲ ရိုးရိုး လင့်ခ်စာသား (Plain URL Text) သက်သက်ပဲ ပြန်ပေးခဲ့ရင်
-            if raw_text.startswith("http://") or raw_text.startswith("https://"):
-                img_url = raw_text
-
-        # ဓာတ်ပုံလင့်ခ် ရပြီဆိုရင် ပို့ပေးမည်
         if img_url:
-            # စောင့်ခိုင်းထားတဲ့ စာသားကို ဖြတ်လိုက်ခြင်း
             bot.delete_message(chat_id=call.message.chat.id, message_id=status_msg.message_id)
             
             bot.send_photo(
@@ -80,7 +69,7 @@ def handle_nsfw_requests(call):
             )
         else:
             bot.edit_message_text(
-                f"⚠️ ပုံလင့်ခ်ကို ခွဲထုတ်လို့ မရဖြစ်နေပါတယ်။\n**API ပြန်ပေးတဲ့စာသား:** `{raw_text[:300]}`",
+                f"⚠️ API အလုပ်လုပ်သော်လည်း JSON ထဲတွင် url ရှာမတွေ့ပါ။\n**API Return:** `{response.text}`",
                 chat_id=call.message.chat.id,
                 message_id=status_msg.message_id,
                 parse_mode="Markdown"

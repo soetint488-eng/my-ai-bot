@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 
 # 🔑 TELEGRAM BOT TOKEN သတ်မှတ်ခြင်း
 # (Render ရဲ့ Environment Variables ထဲမှာ BOT_TOKEN ထည့်ထားရင် အလိုအလျောက်ဖတ်မည်၊ မရှိရင် အောက်ပါ String နေရာတွင် ထည့်ပါ)
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk")
 
 # Bot နှင့် Dispatcher အား ကနဦးသတ်မှတ်ခြင်း
 bot = Bot(token=BOT_TOKEN)

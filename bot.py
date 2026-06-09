@@ -3,7 +3,7 @@ import requests
 from telebot import types
 
 # ==================== [ CONFIGURATIONS ] ====================
-BOT_TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0
+BOT_TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
 RAPIDAPI_URL = "https://girls-nude-image.p.rapidapi.com/"
 RAPIDAPI_HOST = "girls-nude-image.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"

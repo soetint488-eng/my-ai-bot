@@ -3,15 +3,9 @@ import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# Token သတ်မှတ်ခြင်း
 TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
-
-# အသက်အတည်ပြုပြီးသား user စာရင်းကို မှတ်ထားရန် dictionary
 verified_users = {}
 
-# =====================================================================
-# ၁။ /start ခေါ်လျှင် သတိပေးချက်စာနှင့် ခလုတ်ပြခြင်း
-# =====================================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     verified_users[user_id] = False
@@ -26,15 +20,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     warning_text = (
         "⚠️ **သတိပေးချက် / WARNING** ⚠️\n\n"
-        "ဒီ Bot တွင် အသက် ၁၈ နှစ်အထက်သာ ကြည့်ရှုခွင့်ရှိသော အကြောင်းအရာများ (AI Cloth Removal) ပါဝင်ပါသည်။\n"
+        "ဒီ Bot တွင် အသက် ၁၈ နှစ်အထက်သာ ကြည့်ရှုခွင့်ရှိသော အကြောင်းအရာများ ပါဝင်ပါသည်။\n"
         "အသက် ၁၈ နှစ်မပြည့်သေးသူများ အသုံးမပြုရပါ။\n\n"
         "သင်သည် အသက် ၁၈ နှစ်ပြည့်ပြီးသူ ဖြစ်ပါသလား။"
     )
     await update.message.reply_text(text=warning_text, reply_markup=reply_markup, parse_mode="Markdown")
 
-# =====================================================================
-# ၂။ ခလုတ်နှိပ်ခြင်းကို စစ်ဆေးခြင်း
-# =====================================================================
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     user_id = query.from_user.id
@@ -50,7 +41,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await query.edit_message_text(text="✅ အတည်ပြုချက် အောင်မြင်သည်။ ယခု ပြုပြင်လိုသော **လူပုံ (ဓာတ်ပုံ)** ကို ပို့ပေးနိုင်ပါပြီ။")
 
 # =====================================================================
-# ၃။ User က ဓာတ်ပုံ ပို့လာသည့်အခါ API နှင့် ချိတ်ဆက် အလုပ်လုပ်မည့်အပိုင်း
+# ရရှိလာသော Screenshot အရ ပြုပြင်ထားသည့် API ချိတ်ဆက်မှုအပိုင်း
 # =====================================================================
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
@@ -59,20 +50,14 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("❌ ကျေးဇူးပြု၍ ပထမဦးစွာ /start ကိုနှိပ်ပြီး အသက် ၁၈ နှစ်ပြည့်ကြောင်း အတည်ပြုပေးပါ။")
         return
 
-    await update.message.reply_text("⏳ ဓာတ်ပုံကို လက်ခံရရှိပါပြီ။ AI ဖြင့် လုပ်ဆောင်နေသဖြင့် ขဏစောင့်ဆိုင်းပေးပါ...")
+    await update.message.reply_text("⏳ ဓာတ်ပုံကို လက်ခံရရှိပါပြီ။ AI ဖြင့် လုပ်ဆောင်နေသဖြင့် ခဏစောင့်ဆိုင်းပေးပါ...")
 
-    # (က) User ပို့လိုက်တဲ့ ဓာတ်ပုံရဲ့ လင့်ခ်ကို Telegram ဆာဗာကနေ ဆွဲယူခြင်း
+    # Telegram ဆာဗာပေါ်ရှိ ပုံလင့်ခ်ကို ယူခြင်း
     photo_file = await update.message.photo[-1].get_file()
     user_photo_url = photo_file.file_path  
 
-    # (ခ) API သို့ ပုံလင့်ခ် ထည့်သွင်း၍ လှမ်းခေါ်ခြင်း
-    API_URL = "https://nodress.p.rapidapi.com/image"
-    
-    # ပြင်ဆင်ချက်- API သတ်မှတ်ချက်အရ ဓာတ်ပုံလင့်ခ်ကို 'image' သို့မဟုတ် 'url' ဟု ထည့်ပေးရန် လိုအပ်သည်
-    query_params = {
-        'DeepStrip': 'Image',
-        'image': user_photo_url  # သို့မဟုတ် API သတ်မှတ်ချက်အရ 'url' ဟု ပြောင်းနိုင်သည်
-    }
+    # သင့် Screenshot ပြကွက်အရ သတ်မှတ်ချက်အသစ်များ
+    API_URL = "https://nodress.p.rapidapi.com/image" # သို့မဟုတ် သင့် endpoint URL
     
     headers = {
         'Content-Type': 'application/json',
@@ -80,33 +65,36 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         'x-rapidapi-key': '283b178159msh486932881be989fp157c27jsn617224a255da'
     }
 
+    # Screenshot ထဲက body တောင်းဆိုချက်အရ json ပုံစံဖြင့် ထည့်သွင်းခြင်း
+    # (validation error မတက်စေရန် body ထဲတွင် ပို့ရပါမည်)
+    payload = {
+        "id_gen": "123456789",
+        "name": "egncvJ0cJemcUX5",
+        "webhook": "https://example.com/webhook",
+        "image": user_photo_url  # User ပို့လိုက်တဲ့ ပုံလင့်ခ်ကို ဒီနေရာမှာ ထည့်ပေးလိုက်ပါတယ်
+    }
+
     try:
-        response = requests.get(API_URL, headers=headers, params=query_params)
-        
-        # စစ်ဆေးရန်- API ဘက်က ဘာတွေ ပြန်ပေးလဲဆိုတာ ကြည့်ခြင်း
-        print(f"Status Code: {response.status_code}")
+        # GET မဟုတ်ဘဲ requests.post သို့ ပြောင်းလဲလိုက်ပါတယ်
+        response = requests.post(API_URL, headers=headers, json=payload)
         
         if response.status_code == 200:
             result = response.json()
             
-            # API ရဲ့ output key ပေါ်မူတည်ပြီး ပုံကို ဆွဲထုတ်ခြင်း
+            # API က ပြန်ပေးတဲ့ JSON ထဲမှာ ပုံလင့်ခ် ပါ/မပါ စစ်ဆေးခြင်း
+            # (မှတ်ချက် - API ရဲ့ ရလဒ်ပေါ်မူတည်ပြီး key နာမည် ပြောင်းလဲနိုင်သည်)
             if "url" in result:
-                output_image_url = result["url"]
-                await update.message.reply_photo(photo=output_image_url, caption="✨ AI ဖြင့် ပြုပြင်ပြီးစီးသော ဓာတ်ပုံ ဖြစ်ပါသည်။")
+                await update.message.reply_photo(photo=result["url"], caption="✨ AI ဖြင့် ပြုပြင်ပြီးစီးသော ဓာတ်ပုံ ဖြစ်ပါသည်။")
             elif "image" in result:
-                output_image_url = result["image"]
-                await update.message.reply_photo(photo=output_image_url, caption="✨ AI ဖြင့် ပြုပြင်ပြီးစီးသော ဓာတ်ပုံ ဖြစ်ပါသည်။")
+                await update.message.reply_photo(photo=result["image"], caption="✨ AI ဖြင့် ပြုပြင်ပြီးစီးသော ဓာတ်ပုံ ဖြစ်ပါသည်။")
             else:
-                await update.message.reply_text(f"⚠️ ပုံလင့်ခ် မထွက်လာပါ။ API Response: {str(result)}")
+                await update.message.reply_text(f"⚠️ လုပ်ဆောင်ချက် အောင်မြင်သော်လည်း ပုံလင့်ခ် တိုက်ရိုက်မထွက်လာပါ။\nAPI Response: {str(result)}")
         else:
-            await update.message.reply_text(f"❌ API Error တက်သွားသည်။ Status: {response.status_code}\nအသေးစိတ်: {response.text}")
+            await update.message.reply_text(f"❌ API Error တက်သွားသည်။ Code: {response.status_code}\nအသေးစိတ်: {response.text}")
             
     except Exception as e:
-        await update.message.reply_text(f"❌ ဆာဗာချက်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
+        await update.message.reply_text(f"❌ ဆာဗာချိတ်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
 
-# =====================================================================
-# ၄။ ပရိုဂရမ် စတင်ပတ်မည့်နေရာ
-# =====================================================================
 def main() -> None:
     application = Application.builder().token(TOKEN).build()
 

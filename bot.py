@@ -15,9 +15,6 @@ RAPIDAPI_HOST = "undress-ai-api.p.rapidapi.com"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 
 RENDER_WEB_URL = "https://my-ai-bot-xkv8.onrender.com"
-
-# 🔑 အလကားသုံးလို့ရတဲ့ ImgBB API Key (ပုံများကို အများသုံးလင့်ခ်ပြောင်းရန်)
-IMGBB_API_KEY = "3b07047715b706c4b2b60451fc70f3f3"
 # ============================================================
 
 bot = telebot.TeleBot(BOT_TOKEN, num_threads=1)
@@ -76,18 +73,19 @@ def handle_photo(message):
         
         bot.edit_message_text("🌐 ဓာတ်ပုံကို Cloud Server သို့ လွှဲပြောင်းနေပါပြီ...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
-        # ၂။ ဓာတ်ပုံကို ImgBB Server သို့ တင်ပြီး Direct URL ပြောင်းခြင်း
-        imgbb_url = "https://api.imgbb.com/1/upload"
-        files = {"image": downloaded_file}
-        imgbb_params = {"key": IMGBB_API_KEY}
-        
-        imgbb_res = requests.post(imgbb_url, params=imgbb_params, files=files)
-        
-        if imgbb_res.status_code == 200:
-            # သန့်ရှင်းပြီး API တိုက်ရိုက်ဆွဲလို့ရမည့် ပုံလင့်ခ်အစစ်ကို ရယူခြင်း
-            public_img_url = imgbb_res.json()["data"]["url"]
-        else:
-            bot.edit_message_text("❌ ဓာတ်ပုံကို အများသုံးလင့်ခ်ပြောင်းရတာ အဆင်မပြေဖြစ်သွားပါသည်။", chat_id=message.chat.id, message_id=status_msg.message_id)
+        # ၂။ Telegra.ph (Telegram Image Hosting) ပေါ်သို့ အလကား တိုက်ရိုက်တင်ခြင်း
+        # ⚠️ မည်သည့် API Key မှ မလိုဘဲ အများသုံး Direct Link အဖြစ် ပြောင်းပေးပါသည်
+        try:
+            telegraph_res = requests.post(
+                "https://telegra.ph/upload", 
+                files={"file": ("image.jpg", downloaded_file, "image/jpeg")}
+            ).json()
+            
+            # ထွက်လာသော path ကို အများသုံး link အဖြစ် ပြောင်းလဲခြင်း
+            public_img_url = "https://telegra.ph" + telegraph_res[0]["src"]
+            
+        except Exception:
+            bot.edit_message_text("❌ ဓာတ်ပုံကို လင့်ခ်ပြောင်းရတာ အဆင်မပြေဖြစ်သွားပါသည်။ တစ်ချက်ပြန်ပို့ကြည့်ပါဗျာ။", chat_id=message.chat.id, message_id=status_msg.message_id)
             return
 
         bot.edit_message_text("🪄 API ဆာဗာသို့ တောင်းဆိုချက် ပို့နေပါပြီ... (ဗီဒီယိုလုပ်ရန် စောင့်ဆိုင်းရပါမည်)", chat_id=message.chat.id, message_id=status_msg.message_id)
@@ -102,7 +100,7 @@ def handle_photo(message):
         user_webhook = f"{RENDER_WEB_URL}/webhook/{message.chat.id}"
         
         payload = {
-            "image": public_img_url,  # Telegram link မဟုတ်တော့ဘဲ ImgBB က အများသုံးလင့်ခ် ဖြစ်သွားပါပြီ
+            "image": public_img_url,  # Telegra.ph လင့်ခ် (API တိုက်ရိုက် ဝင်ဆွဲနိုင်ပါသည်)
             "name": generate_random_string(),
             "id_gen": generate_random_id(),
             "webhook": user_webhook
@@ -115,7 +113,7 @@ def handle_photo(message):
             bot.edit_message_text(
                 "🚀 **API သို့ တင်သွင်းခြင်း အောင်မြင်ပါသည်။**\n\n"
                 "AI မှ ဗီဒီယိုဖန်တီးခြင်းကို နောက်ကွယ်တွင် လုပ်ဆောင်နေပါသည်။ "
-                "ပြီးစီးပါက ဗီဒီယိုဖိုင်ကို ဤနေရာသို့ အလိုအလျောက် လှမ်းပို့ပေးပါလိမည်ဗျာ။", 
+                "ပြီးစီးပါက ဗီဒီယိုဖိုင်ကို ဤနေရာသို့ အလိုအလျောက် လှမ်းပို့ပေးပါလိမ့်မည်ဗျာ။", 
                 chat_id=message.chat.id, 
                 message_id=status_msg.message_id,
                 parse_mode="Markdown"
@@ -143,5 +141,5 @@ if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(2)
     
-    print("🤖 Undress AI Video Bot Active with ImgBB Bypass...")
+    print("🤖 Undress AI Video Bot Active with Telegra.ph Bypass...")
     bot.infinity_polling()

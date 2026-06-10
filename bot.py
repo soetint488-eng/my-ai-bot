@@ -71,21 +71,23 @@ def handle_photo(message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        bot.edit_message_text("🌐 ဓာတ်ပုံကို Cloud Server သို့ လွှဲပြောင်းနေပါပြီ...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.edit_message_text("🌐 ဓာတ်ပုံကို တည်ငြိမ်သော Cloud ဆာဗာသို့ တင်နေပါပြီ...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
-        # ၂။ Telegra.ph (Telegram Image Hosting) ပေါ်သို့ အလကား တိုက်ရိုက်တင်ခြင်း
-        # ⚠️ မည်သည့် API Key မှ မလိုဘဲ အများသုံး Direct Link အဖြစ် ပြောင်းပေးပါသည်
+        # ၂။ Catbox.moe သို့ ပုံကို တိုက်ရိုက်တင်ပြီး Direct URL ပြောင်းခြင်း
         try:
-            telegraph_res = requests.post(
-                "https://telegra.ph/upload", 
-                files={"file": ("image.jpg", downloaded_file, "image/jpeg")}
-            ).json()
+            catbox_url = "https://catbox.moe/user/api.php"
+            payload_catbox = {"reqtype": "fileupload"}
+            files_catbox = {"fileToUpload": ("image.jpg", downloaded_file, "image/jpeg")}
             
-            # ထွက်လာသော path ကို အများသုံး link အဖြစ် ပြောင်းလဲခြင်း
-            public_img_url = "https://telegra.ph" + telegraph_res[0]["src"]
+            catbox_res = requests.post(catbox_url, data=payload_catbox, files=files_catbox)
             
+            if catbox_res.status_code == 200 and "https://" in catbox_res.text:
+                public_img_url = catbox_res.text.strip()
+            else:
+                raise Exception("Upload failed")
+                
         except Exception:
-            bot.edit_message_text("❌ ဓာတ်ပုံကို လင့်ခ်ပြောင်းရတာ အဆင်မပြေဖြစ်သွားပါသည်။ တစ်ချက်ပြန်ပို့ကြည့်ပါဗျာ။", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text(f"❌ ဓာတ်ပုံကို လင့်ခ်ပြောင်းရတာ အဆင်မပြေဖြစ်သွားပါသည်။ တစ်ချက်ပြန်ပို့ကြည့်ပါဗျာ။", chat_id=message.chat.id, message_id=status_msg.message_id)
             return
 
         bot.edit_message_text("🪄 API ဆာဗာသို့ တောင်းဆိုချက် ပို့နေပါပြီ... (ဗီဒီယိုလုပ်ရန် စောင့်ဆိုင်းရပါမည်)", chat_id=message.chat.id, message_id=status_msg.message_id)
@@ -100,7 +102,7 @@ def handle_photo(message):
         user_webhook = f"{RENDER_WEB_URL}/webhook/{message.chat.id}"
         
         payload = {
-            "image": public_img_url,  # Telegra.ph လင့်ခ် (API တိုက်ရိုက် ဝင်ဆွဲနိုင်ပါသည်)
+            "image": public_img_url,  # Catbox Direct Link (ဥပမာ- https://files.catbox.moe/xxxxxx.jpg)
             "name": generate_random_string(),
             "id_gen": generate_random_id(),
             "webhook": user_webhook
@@ -141,5 +143,5 @@ if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(2)
     
-    print("🤖 Undress AI Video Bot Active with Telegra.ph Bypass...")
+    print("🤖 Undress AI Video Bot Active with Catbox Bypass...")
     bot.infinity_polling()

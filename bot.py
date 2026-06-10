@@ -1,18 +1,40 @@
+import os
 import sys
 import requests
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
+# ⚠️ အသစ်ပေးထားသော Token ကို ထည့်သွင်းထားပါသည်
+TOKEN = "8702294693:AAHzhhFSuogotRM4US1SSlnb2sogss6FUPA"
+
 verified_users = {}
 
+# =====================================================================
+# Render Web Service တွင် Timed Out မဖြစ်အောင် ဟန်ဆောင် Server ဆောက်ခြင်း
+# =====================================================================
+class DummyServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is Active and Running!")
+
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), DummyServer)
+    server.serve_forever()
+
+# =====================================================================
+# Bot လုပ်ဆောင်ချက် အပိုင်းများ
+# =====================================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     verified_users[user_id] = False
 
     keyboard = [
         [
-            InlineKeyboardButton("✅ ဟုတ်ကဲ့၊ ၁9 နှစ်ပြည့်ပါပြီ", callback_data='age_verified'),
+            InlineKeyboardButton("✅ ဟုတ်ကဲ့၊ ၁၈ နှစ်ပြည့်ပါပြီ", callback_data='age_verified'),
             InlineKeyboardButton("❌ မပြည့်သေးပါ", callback_data='age_failed')
         ]
     ]
@@ -40,9 +62,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         verified_users[user_id] = True
         await query.edit_message_text(text="✅ အတည်ပြုချက် အောင်မြင်သည်။ ယခု ပြုပြင်လိုသော **လူပုံ (ဓာတ်ပုံ)** ကို ပို့ပေးနိုင်ပါပြီ။")
 
-# =====================================================================
-# အသစ်ပေးထားသော curl အတိုင်း အလုပ်လုပ်မည့် Function
-# =====================================================================
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
 
@@ -56,7 +75,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     photo_file = await update.message.photo[-1].get_file()
     user_photo_url = photo_file.file_path  
 
-    # ပေးထားသော curl specification အသစ်များ
+    # API သတ်မှတ်ချက်များ
     API_URL = "https://undress-ai-api.p.rapidapi.com/api/videoGenerations/animate"
     
     headers = {
@@ -65,27 +84,22 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         'x-rapidapi-key': '283b178159msh486932881be989fp157c27jsn617224a255da'
     }
 
-    # x-www-form-urlencoded ဖြစ်သောကြောင့် requests တွင် json= အစား data= သုံးရပါမည်
     form_data = {
-        'image': user_photo_url,  # Telegram ပုံလင့်ခ်ကို ထည့်သွင်းခြင်း
+        'image': user_photo_url,  
         'name': 'egncvJ0CJemcUX5',
         'id_gen': '123456789',
         'webhook': 'https://example.com/webhook'
     }
 
     try:
-        # POST request ပို့ခြင်း
         response = requests.post(API_URL, headers=headers, data=form_data)
         
-        if response.status_code == 200 or response.status_code == 201:
+        if response.status_code in [200, 201]:
             result = response.json()
             
-            # API က ဗီဒီယို သို့မဟုတ် ပုံလင့်ခ်ကို ပြန်ပေးသည့် Key အား ရှာဖွေခြင်း
-            # (များသောအားဖြင့် 'url', 'video_url' သို့မဟုတ် 'output' ဟု ပါတတ်ပါသည်)
             output_url = result.get("url") or result.get("video_url") or result.get("image") or result.get("output")
             
             if output_url:
-                # ရလဒ်က ဗီဒီယိုဖိုင် ဖြစ်နိုင်ခြေများသောကြောင့် အဆင်ပြေအောင် reply_document သုံးထားပါတယ်
                 await update.message.reply_document(document=output_url, caption="✨ AI ဖြင့် ပြုပြင်ဖန်တီးပြီးစီးသော ရလဒ်ဖိုင် ဖြစ်ပါသည်။")
             else:
                 await update.message.reply_text(f"⚠️ လုပ်ဆောင်ချက် အောင်မြင်သော်လည်း ရလဒ်ဖိုင်လင့်ခ်ကို တိုက်ရိုက်ရှာမတွေ့ပါ။\nAPI Response: {str(result)}")
@@ -93,16 +107,25 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await update.message.reply_text(f"❌ API Error တက်သွားသည်။ Code: {response.status_code}\nအသေးစိတ်: {response.text}")
             
     except Exception as e:
-        await update.message.reply_text(f"❌ ဆာဗာချိတ်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
+        await update.message.reply_text(f"❌ ဆာဗာချက်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
 
+# =====================================================================
+# ပရိုဂရမ် စတင်ပတ်မည့် ပင်မနေရာ
+# =====================================================================
 def main() -> None:
+    # 1. Web Service ဖြစ်၍ တိုင်မောက်မဖြစ်အောင် ဟန်ဆောင်ဆာဗာကို Background တွင် အရင်ပတ်ထားမည်
+    Thread(target=run_dummy_server, daemon=True).start()
+
+    # 2. Telegram Bot ဆောက်ခြင်း
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_click))
     application.add_handler(MessageHandler(filters.PHOTO, handle_image))
 
     print("Bot စတင်ပတ်နေပါပြီ...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    
+    # 3. drop_pending_updates=True ထည့်ထားသဖြင့် ယခင်တိုင်ပတ်နေသော request အဟောင်းများကို ရှင်းထုတ်ပစ်ပါမည်
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()

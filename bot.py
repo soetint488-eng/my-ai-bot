@@ -12,55 +12,57 @@ TOKEN = "8702294693:AAHzhhFSuogotRM4US1SSlnb2sogss6FUPA"
 # =====================================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text = (
-        "👋 မင်္ဂလာပါဗျာ။ ကျွန်တော်ကတော့ **Gemini AI Text-to-Image Bot** ဖြစ်ပါတယ်။\n\n"
-        "သင် စိတ်ကူးထဲရှိတဲ့အတိုင်း ပုံဖော်ချင်တဲ့ စာသား (Prompt) တွေကို **အင်္ဂလိပ်လို** ရိုက်ပို့ပေးပါ။\n"
-        "ဥပမာ - `A majestic dragon on a mountain` စသဖြင့် ရိုက်ပို့နိုင်ပါတယ်ခင်ဗျာ။"
+        "🎨 မင်္ဂလာပါဗျာ။ ကျွန်တော်ကတော့ **FLUX AI Text-to-Image Bot** ဖြစ်ပါတယ်။\n\n"
+        "သင် စိတ်ကူးထဲရှိတဲ့အတိုင်း ပုံဖော်ချင်တဲ့ စာသား (Prompt) တွေကို ပေးပို့နိုင်ပါတယ်ခင်ဗျာ။\n"
+        "*(မြန်မာလိုရော အင်္ဂလိပ်လိုပါ ရိုက်ပို့လို့ရပါတယ်)*\n\n"
+        "ဥပမာ - `iron man and spider man` သို့မဟုတ် `လှပတဲ့ မြန်မာအမျိုးသမီးတစ်ဦး` စသဖြင့်။"
     )
     await update.message.reply_text(text=welcome_text, parse_mode="Markdown")
 
 # =====================================================================
-# ၂။ User က စာသားပို့လာလျှင် Gemini AI ဖြင့် ပုံဖော်ပေးမည့်အပိုင်း
+# ၂။ User ပို့လာသည့် စာသားကို FLUX AI ဖြင့် ပုံဖော်ပေးမည့်အပိုင်း
 # =====================================================================
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_flux_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_prompt = update.message.text  # User ရိုက်ပို့လိုက်သော စာသား
 
-    await update.message.reply_text("⏳ AI ဖြင့် ဓာတ်ပုံ စတင်ဖန်တီးနေပါပြီ။ ခဏစောင့်ဆိုင်းပေးပါ...")
+    await update.message.reply_text("⏳ FLUX AI ဖြင့် ဓာတ်ပုံ စတင်ဖန်တီးနေပါပြီ။ ၁ မိနစ်ခန့် ကြာနိုင်သဖြင့် ခဏစောင့်ဆိုင်းပေးပါ...")
 
-    # ပေးထားသော curl specification အတိုင်း URL နှင့် Parameter များ သတ်မှတ်ခြင်း
-    API_URL = "https://nano-banana-gemini-fast-text-to-image-api.p.rapidapi.com/api/gemini/text-image"
-    
-    query_params = {
-        'prompt': user_prompt,  # User ပို့လိုက်သော စာသားကို ဤနေရာတွင် ထည့်သွင်းပါသည်
-        'width': '512',
-        'height': '512',
-        'seed': '50'
-    }
+    # ပေးထားသော curl အတိုင်း အချက်အလက်များ သတ်မှတ်ခြင်း
+    API_URL = "https://ai-text-to-image-generator-flux-free-api.p.rapidapi.com/aaaaaaaaaaaaaaaaaiimagegenerator/quick.php"
     
     headers = {
         'Content-Type': 'application/json',
-        'x-rapidapi-host': 'nano-banana-gemini-fast-text-to-image-api.p.rapidapi.com',
+        'x-rapidapi-host': 'ai-text-to-image-generator-flux-free-api.p.rapidapi.com',
         'x-rapidapi-key': '283b178159msh486932881be989fp157c27jsn617224a255da'
     }
 
+    # curl ထဲက --data အတိုင်း JSON Payload တည်ဆောက်ခြင်း
+    payload = {
+        "prompt": user_prompt, # User ပို့လိုက်သော စာသားကို ထည့်သွင်းခြင်း
+        "style_id": 4,         # ပေးထားသည့်အတိုင်း Style ID 4 သုံးထားသည်
+        "size": "1-1"          # ပုံစံ 1:1 လေးထောင့်ပုံစံ
+    }
+
     try:
-        # GET Method ဖြစ်သောကြောင့် requests.get ကို သုံးပါသည်
-        response = requests.get(API_URL, headers=headers, params=query_params)
+        # POST Method ဖြစ်ပြီး content-type: json မို့ json=payload ကို သုံးပါသည်
+        response = requests.post(API_URL, headers=headers, json=payload)
         
         if response.status_code == 200:
-            # အကယ်၍ API က ပုံကို လင့်ခ်အဖြစ် မဟုတ်ဘဲ Image Binary (ဖိုင်စစ်စစ်) အနေနဲ့ ပြန်ပေးရင်
-            # တိုက်ရိုက် ပို့ပေးနိုင်ရန် response.content ကို သုံးရပါမည်
-            if "image" in response.headers.get("Content-Type", ""):
-                image_data = response.content
-                await update.message.reply_photo(photo=image_data, caption=f"✨ ဖန်တီးပြီးစီးသောပုံစံ- {user_prompt}")
+            result = response.json()
+            
+            # API က ပြန်ပေးတဲ့ JSON ထဲက ထွက်လာမယ့် ပုံလင့်ခ် (Key) ကို ရှာဖွေခြင်း
+            # FLUX API အများစုတွင် 'url', 'image', 'status: success' စသဖြင့် ပါတတ်သည်
+            output_url = result.get("url") or result.get("image_url") or result.get("image") or result.get("output")
+            
+            # အကယ်၍ API က direct url မပေးဘဲ key တစ်ခုခုထဲ ဝှက်ပေးထားရင် စစ်ဆေးရန် (ဥပမာ- result['data'][0]['url'])
+            if not output_url and "data" in result and len(result["data"]) > 0:
+                output_url = result["data"][0].get("url")
+
+            if output_url:
+                await update.message.reply_photo(photo=output_url, caption=f"✨ FLUX AI ဖြင့် ဖန်တီးပြီးစီးပါပြီ-\n`{user_prompt}`", parse_mode="Markdown")
             else:
-                # အကယ်၍ JSON data ပြန်ပေးပြီး အထဲတွင် URL ပါဝင်ပါက
-                result = response.json()
-                output_url = result.get("url") or result.get("image_url") or result.get("image")
-                
-                if output_url:
-                    await update.message.reply_photo(photo=output_url, caption=f"✨ ဖန်တီးပြီးစီးသောပုံစံ- {user_prompt}")
-                else:
-                    await update.message.reply_text(f"⚠️ ပုံကို ရှာမတွေ့ပါ။ API Response: {str(result)}")
+                # ပုံထွက်မလာရင် API Response ကို စာသားအတိုင်း ပြပေးဖို့ပါ
+                await update.message.reply_text(f"⚠️ ပုံလင့်ခ်ကို ရှာမတွေ့ပါ။\nAPI Response: {str(result)}")
         else:
             await update.message.reply_text(f"❌ API Error တက်သွားသည်။ Code: {response.status_code}\nအသေးစိတ်: {response.text}")
             
@@ -75,10 +77,10 @@ def main() -> None:
     
     application.add_handler(CommandHandler("start", start))
     
-    # User က စာသား (TEXT) ပို့လာရင် handle_text ထဲကို ပို့ပေးရန် သတ်မှတ်ခြင်း
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    # User ပို့သမျှ စာသားတွေကို ဖမ်းယူပြီး handle_flux_image ဆီ ပို့ပေးခြင်း
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_flux_image))
 
-    print("Gemini Image Bot စတင်ပတ်နေပါပြီ...")
+    print("FLUX Image Bot စတင်ပတ်နေပါပြီ...")
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":

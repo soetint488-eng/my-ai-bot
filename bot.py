@@ -14,7 +14,7 @@ verified_users = {}
 # =====================================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    verified_users[user_id] = False # အစပိုင်းမှာ ခွင့်မပြုသေးကြောင်း မှတ်ထားမည်
+    verified_users[user_id] = False
 
     keyboard = [
         [
@@ -55,25 +55,23 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
 
-    # အသက်မပြည့်သေးရင် သို့မဟုတ် ခလုတ်မနှိပ်ရသေးရင် အလုပ်မလုပ်ပါ
     if not verified_users.get(user_id, False):
         await update.message.reply_text("❌ ကျေးဇူးပြု၍ ပထမဦးစွာ /start ကိုနှိပ်ပြီး အသက် ၁၈ နှစ်ပြည့်ကြောင်း အတည်ပြုပေးပါ။")
         return
 
-    await update.message.reply_text("⏳ ဓာတ်ပုံကို လက်ခံရရှိပါပြီ။ AI ဖြင့် လုပ်ဆောင်နေသဖြင့် ခဏစောင့်ဆိုင်းပေးပါ...")
+    await update.message.reply_text("⏳ ဓာတ်ပုံကို လက်ခံရရှိပါပြီ။ AI ဖြင့် လုပ်ဆောင်နေသဖြင့် ขဏစောင့်ဆိုင်းပေးပါ...")
 
     # (က) User ပို့လိုက်တဲ့ ဓာတ်ပုံရဲ့ လင့်ခ်ကို Telegram ဆာဗာကနေ ဆွဲယူခြင်း
     photo_file = await update.message.photo[-1].get_file()
-    user_photo_url = photo_file.file_path  # User ပို့လိုက်တဲ့ ပုံလင့်ခ်ကို ရပါပြီ
+    user_photo_url = photo_file.file_path  
 
-    # (ခ) ပေးထားသော RapidAPI ထံသို့ ပုံလင့်ခ် ပေးပို့တောင်းဆိုခြင်း
+    # (ခ) API သို့ ပုံလင့်ခ် ထည့်သွင်း၍ လှမ်းခေါ်ခြင်း
     API_URL = "https://nodress.p.rapidapi.com/image"
     
-    # များသောအားဖြင့် ဤကဲ့သို့ API များသည် ပုံလင့်ခ်ကို Parameter သို့မဟုတ် Body ထဲတွင် ထည့်ခိုင်းတတ်ပါသည်
-    # ဒီနေရာမှာ API ရဲ့ လိုအပ်ချက်အတိုင်း ဖြည့်သွင်းရပါမယ် (ဥပမာအနေနဲ့ query ထဲထည့်ပြထားပါတယ်)
+    # ပြင်ဆင်ချက်- API သတ်မှတ်ချက်အရ ဓာတ်ပုံလင့်ခ်ကို 'image' သို့မဟုတ် 'url' ဟု ထည့်ပေးရန် လိုအပ်သည်
     query_params = {
         'DeepStrip': 'Image',
-        'url': user_photo_url  # သင့် API သတ်မှတ်ချက်အတိုင်း ပြောင်းလဲနိုင်ပါသည်
+        'image': user_photo_url  # သို့မဟုတ် API သတ်မှတ်ချက်အရ 'url' ဟု ပြောင်းနိုင်သည်
     }
     
     headers = {
@@ -85,22 +83,26 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         response = requests.get(API_URL, headers=headers, params=query_params)
         
+        # စစ်ဆေးရန်- API ဘက်က ဘာတွေ ပြန်ပေးလဲဆိုတာ ကြည့်ခြင်း
+        print(f"Status Code: {response.status_code}")
+        
         if response.status_code == 200:
             result = response.json()
             
-            # (ဂ) API မှ ပြန်ထွက်လာသော JSON ထဲက ပုံလင့်ခ်ကို ရှာဖွေခြင်း
-            # Note: API ရဲ့ JSON response key ပေါ်မူတည်ပြီး "url" နေရာမှာ ပြောင်းလဲပေးရန်
+            # API ရဲ့ output key ပေါ်မူတည်ပြီး ပုံကို ဆွဲထုတ်ခြင်း
             if "url" in result:
                 output_image_url = result["url"]
-                # ပြီးစီးသွားသော ပုံကို User ထံ ပြန်လည် ပေးပို့ခြင်း
+                await update.message.reply_photo(photo=output_image_url, caption="✨ AI ဖြင့် ပြုပြင်ပြီးစီးသော ဓာတ်ပုံ ဖြစ်ပါသည်။")
+            elif "image" in result:
+                output_image_url = result["image"]
                 await update.message.reply_photo(photo=output_image_url, caption="✨ AI ဖြင့် ပြုပြင်ပြီးစီးသော ဓာတ်ပုံ ဖြစ်ပါသည်။")
             else:
-                await update.message.reply_text(f"⚠️ ပုံမထွက်လာပါ။ API အဖြေ: {str(result)}")
+                await update.message.reply_text(f"⚠️ ပုံလင့်ခ် မထွက်လာပါ။ API Response: {str(result)}")
         else:
-            await update.message.reply_text(f"❌ API Error တက်သွားသည်။ Status: {response.status_code}")
+            await update.message.reply_text(f"❌ API Error တက်သွားသည်။ Status: {response.status_code}\nအသေးစိတ်: {response.text}")
             
     except Exception as e:
-        await update.message.reply_text(f"❌ ဆာဗာချိတ်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
+        await update.message.reply_text(f"❌ ဆာဗာချက်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
 
 # =====================================================================
 # ၄။ ပရိုဂရမ် စတင်ပတ်မည့်နေရာ
@@ -108,11 +110,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 def main() -> None:
     application = Application.builder().token(TOKEN).build()
 
-    # စီမံမည့် Handler များ
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_click))
-    
-    # User က ဓာတ်ပုံ (Photo) ပို့လာရင် handle_image ထဲကို ပို့ပေးဖို့ သတ်မှတ်ခြင်း
     application.add_handler(MessageHandler(filters.PHOTO, handle_image))
 
     print("Bot စတင်ပတ်နေပါပြီ...")

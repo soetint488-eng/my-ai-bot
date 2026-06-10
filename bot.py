@@ -1,147 +1,91 @@
-import telebot
+import sys
 import requests
-import time
-import os
-import random
-import string
-from threading import Thread
-from flask import Flask, request, jsonify
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# ==================== [ CONFIGURATIONS ] ====================
-BOT_TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
+# Token သတ်မှတ်ခြင်း
+TOKEN = "8702294693:AAHff0iYwzElcLNZzPhlXodImHePQuzYDl0"
 
-RAPIDAPI_URL = "https://undress-ai-api.p.rapidapi.com/api/videoGenerations/animate"
-RAPIDAPI_HOST = "undress-ai-api.p.rapidapi.com"
-RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
-
-RENDER_WEB_URL = "https://my-ai-bot-xkv8.onrender.com"
-# ============================================================
-
-bot = telebot.TeleBot(BOT_TOKEN, num_threads=1)
-app = Flask(__name__)
-
-def generate_random_string(length=15):
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
-
-def generate_random_id():
-    return str(random.randint(100000000, 999999999))
-
-# --- Flask Webhook Receiver ---
-@app.route('/')
-def home():
-    return "Bot Server is Alive!", 200
-
-@app.route('/webhook/<chat_id>', methods=['POST'])
-def api_webhook(chat_id):
-    try:
-        data = request.json or request.form
-        print(f"📩 Webhook Received for Chat ID {chat_id}: {data}")
-        
-        video_url = data.get("video_url") or data.get("url") or data.get("output") or data.get("data", {}).get("url")
-        
-        if video_url:
-            bot.send_video(
-                chat_id=chat_id, 
-                video=video_url, 
-                caption="✨ **AI မှ သင့်ဗီဒီယိုကို ဖန်တီးပေးပြီးပါပြီဗျာ။**"
-            )
-        else:
-            bot.send_message(chat_id=chat_id, text=f"⚠️ ဗီဒီယို အောင်မြင်စွာ ပြီးဆုံးသော်လည်း လင့်ခ်ရှာမတွေ့ပါ။\n**Data:** `{str(data)}`")
-            
-    except Exception as e:
-        print(f"Error in Webhook: {str(e)}")
-        
-    return jsonify({"status": "success"}), 200
-
-# --- Telegram Bot ရဲ့ လုပ်ဆောင်ချက်များ ---
-@bot.message_handler(commands=['start'])
-def start_cmd(message):
-    welcome_text = (
-        "🤖 **Undress AI Video Bot မှ ကြိုဆိုပါတယ်**\n\n"
-        "ကျွန်တော့်ဆီကို ပြုပြင်လိုတဲ့ ဓာတ်ပုံတစ်ပုံ ပို့ပေးလိုက်ပါဗျာ။"
-    )
-    bot.reply_to(message, welcome_text, parse_mode="Markdown")
-
-@bot.message_handler(content_types=['photo'])
-def handle_photo(message):
-    status_msg = bot.reply_to(message, "⏳ ဓာတ်ပုံကို ရယူနေပါပြီ... ခေတ္တစောင့်ပါဗျာ။")
+# =====================================================================
+# ၁။ /start Command ပို့လာလျှင် အသက်စစ်ဆေးမည့် ခလုတ်ပြခြင်း
+# =====================================================================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Inline Buttons (နှိပ်လို့ရမယ့် ခလုတ်များ) ဆောက်ခြင်း
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ ဟုတ်ကဲ့၊ ၁၈ နှစ်ပြည့်ပါပြီ", callback_data='age_verified'),
+            InlineKeyboardButton("❌ မပြည့်သေးပါ", callback_data='age_failed')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
-    try:
-        # ၁။ Telegram Server မှ ဓာတ်ပုံဖိုင်ကို ဒေါင်းလုဒ်ဆွဲခြင်း
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        
-        bot.edit_message_text("🌐 ဓာတ်ပုံကို တည်ငြိမ်သော Cloud ဆာဗာသို့ တင်နေပါပြီ...", chat_id=message.chat.id, message_id=status_msg.message_id)
-        
-        # ၂။ Catbox.moe သို့ ပုံကို တိုက်ရိုက်တင်ပြီး Direct URL ပြောင်းခြင်း
-        try:
-            catbox_url = "https://catbox.moe/user/api.php"
-            payload_catbox = {"reqtype": "fileupload"}
-            files_catbox = {"fileToUpload": ("image.jpg", downloaded_file, "image/jpeg")}
-            
-            catbox_res = requests.post(catbox_url, data=payload_catbox, files=files_catbox)
-            
-            if catbox_res.status_code == 200 and "https://" in catbox_res.text:
-                public_img_url = catbox_res.text.strip()
-            else:
-                raise Exception("Upload failed")
-                
-        except Exception:
-            bot.edit_message_text(f"❌ ဓာတ်ပုံကို လင့်ခ်ပြောင်းရတာ အဆင်မပြေဖြစ်သွားပါသည်။ တစ်ချက်ပြန်ပို့ကြည့်ပါဗျာ။", chat_id=message.chat.id, message_id=status_msg.message_id)
-            return
+    warning_text = (
+        "⚠️ **သတိပေးချက် / WARNING** ⚠️\n\n"
+        "ဒီ Bot တွင် အသက် ၁၈ နှစ်အထက်သာ ကြည့်ရှုခွင့်ရှိသော အကြောင်းအရာများ ပါဝင်နိုင်ပါသည်။\n"
+        "အသက် ၁၈ နှစ်မပြည့်သေးသူများ အသုံးမပြုရပါ။\n\n"
+        "သင်သည် အသက် ၁၈ နှစ်ပြည့်ပြီးသူ ဖြစ်ပါသလား။"
+    )
+    
+    await update.message.reply_text(text=warning_text, reply_markup=reply_markup, parse_mode="Markdown")
 
-        bot.edit_message_text("🪄 API ဆာဗာသို့ တောင်းဆိုချက် ပို့နေပါပြီ... (ဗီဒီယိုလုပ်ရန် စောင့်ဆိုင်းရပါမည်)", chat_id=message.chat.id, message_id=status_msg.message_id)
+# =====================================================================
+# ၂။ ခလုတ်များနှိပ်လိုက်သည့်အခါ အလုပ်လုပ်မည့် Function
+# =====================================================================
+async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer() # ခလုတ်နှိပ်တာ တုံ့ပြန်မှုရသွားအောင် အရင်လုပ်ခြင်း
+    
+    if query.data == 'age_failed':
+        await query.edit_message_text(text="❌ စည်းကမ်းချက်အရ အသက်မပြည့်သေးသဖြင့် ဤ Bot ကို အသုံးပြုခွင့်မရှိပါ။")
+        return
+
+    if query.data == 'age_verified':
+        await query.edit_message_text(text="⏳ အတည်ပြုချက် အောင်မြင်သည်။ API သို့ ချိတ်ဆက်ပြီး ဓာတ်ပုံတောင်းဆိုနေပါသည်...")
         
-        # ၃။ Headers နှင့် Payload ပြင်ဆင်ခြင်း
+        # --- API ချိတ်ဆက်သည့်အပိုင်း ---
+        API_URL = "https://nodress.p.rapidapi.com/image"
+        query_params = {'DeepStrip': 'Image'}
         headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "x-rapidapi-host": RAPIDAPI_HOST,
-            "x-rapidapi-key": RAPIDAPI_KEY
+            'Content-Type': 'application/json',
+            'x-rapidapi-host': 'nodress.p.rapidapi.com',
+            'x-rapidapi-key': '283b178159msh486932881be989fp157c27jsn617224a255da'
         }
         
-        user_webhook = f"{RENDER_WEB_URL}/webhook/{message.chat.id}"
-        
-        payload = {
-            "image": public_img_url,  # Catbox Direct Link (ဥပမာ- https://files.catbox.moe/xxxxxx.jpg)
-            "name": generate_random_string(),
-            "id_gen": generate_random_id(),
-            "webhook": user_webhook
-        }
-        
-        # ၄။ API ထံ လှမ်းပို့ခြင်း
-        response = requests.post(RAPIDAPI_URL, headers=headers, data=payload)
-        
-        if response.status_code in [200, 201, 202]:
-            bot.edit_message_text(
-                "🚀 **API သို့ တင်သွင်းခြင်း အောင်မြင်ပါသည်။**\n\n"
-                "AI မှ ဗီဒီယိုဖန်တီးခြင်းကို နောက်ကွယ်တွင် လုပ်ဆောင်နေပါသည်။ "
-                "ပြီးစီးပါက ဗီဒီယိုဖိုင်ကို ဤနေရာသို့ အလိုအလျောက် လှမ်းပို့ပေးပါလိမ့်မည်ဗျာ။", 
-                chat_id=message.chat.id, 
-                message_id=status_msg.message_id,
-                parse_mode="Markdown"
-            )
-        else:
-            bot.edit_message_text(
-                f"❌ API Error ဖြစ်သွားပါပြီ။\nStatus Code: {response.status_code}\nMessage: {response.text}", 
-                chat_id=message.chat.id, 
-                message_id=status_msg.message_id
-            )
+        try:
+            response = requests.get(API_URL, headers=headers, params=query_params)
             
-    except Exception as e:
-        bot.edit_message_text(f"❌ Error ဖြစ်ပွားသွားသည် - {str(e)}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            if response.status_code == 200:
+                result = response.json()
+                
+                # တကယ်လို့ API က JSON ထဲမှာ 'url' ဆိုတဲ့ Key နဲ့ ပုံလင့်ခ် ပြန်ပေးတယ်ဆိုရင် -
+                if "url" in result:
+                    image_url = result["url"]
+                    # User ဆီသို့ ဓာတ်ပုံတိုက်ရိုက်ပို့ပေးခြင်း
+                    await query.message.reply_photo(photo=image_url, caption="📸 API မှ ရရှိလာသော ဓာတ်ပုံ ဖြစ်ပါသည်။")
+                else:
+                    # ပုံလင့်ခ်တိုက်ရိုက်မပါဘဲ text ပဲပါလာရင် ပြပေးဖို့
+                    await query.message.reply_text(f"API Response: {str(result)}")
+                    
+            else:
+                await query.message.reply_text(f"❌ API Error တက်သွားသည်။ Status Code: {response.status_code}")
+                
+        except Exception as e:
+            await query.message.reply_text(f"❌ ချိတ်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
 
-def run_flask():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+# =====================================================================
+# ၃။ Bot စတင်ပတ်မည့် ပင်မနေရာ
+# =====================================================================
+def main() -> None:
+    # Application ဆောက်ခြင်း
+    application = Application.builder().token(TOKEN).build()
+
+    # Handler များ ထည့်သွင်းခြင်း
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button_click))
+
+    # Bot ကို စတင် Run ခြင်း
+    print("Bot စတင်အလုပ်လုပ်နေပါပြီ...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    print("🧹 Cleaning old bot connections...")
-    bot.remove_webhook()
-    time.sleep(2)
-    
-    print("🤖 Undress AI Video Bot Active with Catbox Bypass...")
-    bot.infinity_polling()
+    main()

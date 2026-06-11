@@ -1,118 +1,109 @@
 import os
 import sys
 import requests
-import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Telegram Bot Token
 TOKEN = "8702294693:AAHzhhFSuogotRM4US1SSlnb2sogss6FUPA"
 
-# Common Headers for RapidAPI
-HEADERS = {
-    'Content-Type': 'application/json',
-    'x-rapidapi-host': 'text-to-video3.p.rapidapi.com',
-    'x-rapidapi-key': '283b178159msh486932881be989fp157c27jsn617224a255da'
-}
+# User တစ်ယောက်ချင်းစီရဲ့ ဓာတ်ပုံနှစ်ပုံကို ယာယီမှတ်ထားရန် Dictionary
+user_photos = {}
 
 # =====================================================================
-# ၁။ /start ခေါ်လျှင် လမ်းညွှန်ချက်ပြသခြင်း
+# ၁။ /start ခေါ်လျှင် နှုတ်ခွန်းဆက်စကားနှင့် လမ်းညွှန်ချက်ပြခြင်း
 # =====================================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text = (
-        "🎬 **AI Text-to-Video Generator Bot** 🎬\n\n"
-        "သင်စိတ်ကူးထဲရှိသော စာသားများကို ရိုက်ပို့ပေးရုံဖြင့် AI က စက္ကန့်ပိုင်းအတွင်း ဗီဒီယိုအဖြစ် ဖန်တီးပေးမည် ဖြစ်ပါသည်။\n\n"
-        "📝 **အသုံးပြုနည်း-**\n"
-        "ဗီဒီယိုအဖြစ် ပုံဖော်ချင်သည့် စာသား (Prompt) ကို အင်္ဂလိပ်လို ရိုက်ပို့ပေးလိုက်ပါဗျာ။\n"
-        "(ဥပမာ - `A beautiful cyberpunk city at night, 4k, cinematic`)"
+        "🎭 **AI Face Swap Bot မှ ကြိုဆိုပါတယ်** 🎭\n\n"
+        "ဓာတ်ပုံတစ်ပုံထဲက မျက်နှာကို နောက်ဓာတ်ပုံတစ်ပုံရဲ့ ကိုယ်ထည်ပေါ်သို့ AI သုံးပြီး အစားထိုးပေးမည့် စနစ်ဖြစ်ပါသည်။\n\n"
+        "📸 **အသုံးပြုနည်းလမ်းညွှန်-**\n"
+        "၁။ ပထမဦးစွာ **မျက်နှာယူမည့်သူ၏ ဓာတ်ပုံ (Source Face)** ကို ပို့ပေးပါ။\n"
+        "၂။ ပြီးနောက် သွားရောက်ထည့်သွင်းမည့် **နောက်ခံခန္ဓာကိုယ် ဓာတ်ပုံ (Target Body)** ကို ဒုတိယပုံအနေဖြင့် ပို့ပေးရပါမည်။"
     )
     await update.message.reply_text(text=welcome_text, parse_mode="Markdown")
 
 # =====================================================================
-# ၂။ စာသားဝင်လာလျှင် ဗီဒီယိုဖန်တီးပြီး Polling စနစ်ဖြင့် စောင့်ဆိုင်းပေးမည့်အပိုင်း
+# ၂။ User ပို့လာသော ဓာတ်ပုံများကို အဆင့်ဆင့် လက်ခံမှတ်သားပြီး API သို့ ပို့ခြင်း
 # =====================================================================
-async def generate_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    prompt_text = update.message.text.strip()
+async def handle_face_swap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
     
-    # စတင်ကြောင်း အကြောင်းကြားစာ ပို့ခြင်း
-    status_msg = await update.message.reply_text("🚀 AI ဆာဗာသို့ Request ပို့နေပါပြီ...")
+    # ဓာတ်ပုံထဲက အကြည်ဆုံး Size ရဲ့ file_path (URL) ကို ယူခြင်း
+    photo_file = await update.message.photo[-1].get_file()
+    telegram_image_url = photo_file.file_path
 
-    # ⚠️ အဆင့် (၁) - Text to Video စတင်ရန် POST Request ပို့ခြင်း
-    # (မှတ်ချက် - text-to-video3 API ၏ ပုံမှန် အသုံးများသော POST Generation Endpoint ဖြစ်ပါသည်)
-    GENERATE_URL = "https://text-to-video3.p.rapidapi.com/MediaToVideo"
+    # User က ပထမဆုံးအကြိမ် ပုံပို့ခြင်း ဖြစ်ပါက (Source Face အဖြစ် သတ်မှတ်မည်)
+    if user_id not in user_photos:
+        user_photos[user_id] = {
+            "source_url": telegram_image_url
+        }
+        await update.message.reply_text(
+            "✅ **ပထမပုံ (မျက်နှာ) ကို မှတ်သားပြီးပါပြီ။**\n\n"
+            "ယခု အဆိုပါမျက်နှာကို သွားထည့်မည့် **ဒုတိယပုံ (Target Body Image)** ကို ပို့ပေးပါဗျာ။"
+        )
+        return
+
+    # ဒုတိယပုံ ဝင်လာပါက (Target URL အဖြစ် သတ်မှတ်ပြီး API သို့ တန်းပို့မည်)
+    source_url = user_photos[user_id]["source_url"]
+    target_url = telegram_image_url
+    
+    # Session ကို ချက်ချင်းပြန်ဖျက်ခြင်း
+    del user_photos[user_id]
+
+    status_msg = await update.message.reply_text("⏳ AI က မျက်နှာချင်း အစားထိုးလဲလှယ်ပေးနေပါပြီ။ ခဏစောင့်ပေးပါ...")
+
+    # ပေးထားသော curl specification အတိုင်း တည်ဆောက်ခြင်း
+    API_URL = "https://face-swap-video-image-multiface.p.rapidapi.com/runsync"
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'x-rapidapi-host': 'face-swap-video-image-multiface.p.rapidapi.com',
+        'x-rapidapi-key': '283b178159msh486932881be989fp157c27jsn617224a255da'
+    }
+
+    # curl --data အတွင်းရှိ JSON structure အတိုင်း ကွက်တိ ပြင်ဆင်ခြင်း
     payload = {
-        "text_prompt": prompt_text,
-        "aspect_ratio": "16:9"
+        "input": {
+            "enhanceState": True,
+            "mode": "swap-face",
+            "url": source_url,       # ပထမပုံ (Source မျက်နှာ)
+            "targetUrl": target_url   # ဒုတိယပုံ (Target ကိုယ်ထည်)
+        }
     }
 
     try:
-        response = requests.post(GENERATE_URL, headers=HEADERS, json=payload)
+        # POST Request ပို့ခြင်း
+        response = requests.post(API_URL, headers=headers, json=payload)
         
-        if response.status_code == 200 or response.status_code == 201:
-            gen_result = response.json()
+        if response.status_code == 200:
+            result = response.json()
             
-            # API မှ ပြန်ပေးသော Task ID သို့မဟုတ် Media ID ကို ရယူခြင်း
-            # (API တည်ဆောက်ပုံအလိုက် id, media_id, task_id စသဖြင့် လာနိုင်ပါသည်)
-            task_id = gen_result.get("id") or gen_result.get("media_id") or gen_result.get("task_id")
+            # API ရဲ့ output ပုံစံအလိုက် ရလဒ်ပုံလင့်ခ်ကို ဆွဲထုတ်ခြင်း
+            # (အသုံးများသော ကီးများဖြစ်သည့် output_url, image, result သို့မဟုတ် data ထဲမှ ရှာပါမည်)
+            swapped_photo_url = result.get("output_url") or result.get("image") or result.get("url") or result.get("result")
             
-            if not task_id:
-                await status_msg.edit_text(f"⚠️ Task ID မထွက်လာပါ။ API Response: {str(gen_result)}")
-                return
+            if not swapped_photo_url and "data" in result and isinstance(result["data"], dict):
+                swapped_photo_url = result["data"].get("url") or result["data"].get("image")
             
-            await status_msg.edit_text("⏳ AI က ဗီဒီယိုကို စတင်ဆွဲနေပါပြီ။ မိနစ်အနည်းငယ် ကြာနိုင်သဖြင့် ခဏစောင့်ပေးပါ...")
+            # ဒေတာက list ပုံစံမျိုးနဲ့ ကျလာတတ်လျှင် (ဥပမာ- result["output"][0])
+            if not swapped_photo_url and isinstance(result.get("output"), list):
+                swapped_photo_url = result["output"][0]
 
-            # 🔄 အဆင့် (၂) - မိတ်ဆွေပေးထားသော GET Endpoint ကို သုံးပြီး Polling (လှမ်းလှမ်းစစ်ခြင်း) ပြုလုပ်ခြင်း
-            # အမြင့်ဆုံး ၁၅ ကြိမ် (စက္ကန့် ၁၅၀ ခန့်) အထိ စစ်ဆေးပါမည်
-            max_attempts = 15
-            video_url = None
-            
-            for attempt in range(max_attempts):
-                await asyncio.sleep(10) # ၁၀ စက္ကန့် တစ်ကြိမ် စစ်ဆေးမည်
-                
-                # မိတ်ဆွေပေးထားသော GET url ပုံစံအတိုင်း နောက်ဆုံးတွင် task_id တွဲထည့်ခြင်း
-                STATUS_URL = f"https://text-to-video3.p.rapidapi.com/MediaToVideo/{task_id}"
-                status_response = requests.get(STATUS_URL, headers=HEADERS)
-                
-                if status_response.status_code == 200:
-                    status_result = status_response.json()
-                    
-                    # API သတ်မှတ်ချက်အရ status က "completed" သို့မဟုတ် ဗီဒီယိုလင့်ခ် တိုက်ရိုက်ပါမပါ စစ်ခြင်း
-                    # (ပုံမှန်အားဖြင့် result["video_url"] သို့မဟုတ် status== 'success' တွင် လင့်ခ်ပါတတ်ပါသည်)
-                    video_url = status_result.get("video_url") or status_result.get("url") or status_result.get("output_url")
-                    
-                    # အကယ်၍ အဆင့်ဆင့် ထပ်ဝင်ရလျှင်
-                    if not video_url and "data" in status_result and isinstance(status_result["data"], dict):
-                        video_url = status_result["data"].get("url") or status_result["data"].get("video")
-
-                    # ဗီဒီယိုလင့်ခ် ရပြီဆိုလျှင် Loop ထဲမှ ထွက်မည်
-                    if video_url:
-                        break
-                        
-                    # စောင့်ဆိုင်းနေဆဲ အခြေအနေကို User အား ပြသရန်
-                    current_status = status_result.get("status", "processing").lower()
-                    if current_status in ["failed", "error"]:
-                        await status_msg.edit_text("❌ AI ဗီဒီယို ဖန်တီးမှု မအောင်မြင်ပါ။ ဆာဗာတွင် Error ဖြစ်ပွားခဲ့သည်။")
-                        return
-                        
-                    await status_msg.edit_text(f"⏳ ဗီဒီယို ဆွဲနေဆဲ ဖြစ်ပါသည်... (စမ်းသပ်မှုအကြိမ်ရေ: {attempt+1}/{max_attempts})")
-                else:
-                    print(f"Status check failed: {status_response.status_code}")
-
-            # 📥 အဆင့် (၃) - ရလာသော ဗီဒီယိုအား User ထံ ပြန်လည်ပေးပို့ခြင်း
-            if video_url:
-                await status_msg.delete() # စောင့်ခိုင်းထားသော စာသားအား ဖျက်ခြင်း
-                await update.message.reply_video(
-                    video=video_url,
-                    caption=f"🎬 **AI Video Generation အောင်မြင်ပါသည်!**\n\n📝 **Prompt:** `{prompt_text}`",
+            if swapped_photo_url:
+                await status_msg.delete() # စောင့်ခိုင်းထားသော စာသားကို ဖျက်ခြင်း
+                await update.message.reply_photo(
+                    photo=swapped_photo_url, 
+                    caption="🎭 **AI Face Swap ဖြင့် မျက်နှာလဲလှယ်ခြင်း အောင်မြင်ပါသည်!** 🎭", 
                     parse_mode="Markdown"
                 )
             else:
-                await status_msg.edit_text("⚠️ ဗီဒီယို ဖန်တီးချိန် ကြာမြင့်နေပါသည်။ နောက်မှတစ်ခါ ပြန်လည်စမ်းသပ်ပေးပါရန်။")
+                await status_msg.edit_text(f"⚠️ မျက်နှာလဲထားတဲ့ ပုံလင့်ခ်ကို ရှာမတွေ့ပါ။\nAPI Response: {str(result)}")
         else:
-            await status_msg.edit_text(f"❌ API စတင်ချိတ်ဆက်မှု မအောင်မြင်ပါ။ Code: {response.status_code}\nအသေးစိတ်: {response.text}")
+            await status_msg.edit_text(f"❌ API Error တက်သွားသည်။ Code: {response.status_code}\nအသေးစိတ်: {response.text}")
             
     except Exception as e:
-        await status_msg.edit_text(f"❌ ချိတ်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
+        await status_msg.edit_text(f"❌ ဆာဗာချက်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
 
 # =====================================================================
 # ၃။ ပရိုဂရမ် စတင်ပတ်မည့်နေရာ
@@ -122,10 +113,10 @@ def main() -> None:
     
     application.add_handler(CommandHandler("start", start))
     
-    # ဝင်လာသမျှ စာသား (Prompt) များကို ဖမ်းယူရန်
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generate_video))
+    # User ပို့သမျှ ဓာတ်ပုံအားလုံးကို handle_face_swap ဆီ ညွှန်းပေးခြင်း
+    application.add_handler(MessageHandler(filters.PHOTO, handle_face_swap))
 
-    print("Text-to-Video Polling Bot စတင်ပတ်နေပါပြီ...")
+    print("AI Face Swap Bot Running...")
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":

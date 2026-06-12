@@ -2,8 +2,9 @@ import os
 import sys
 import threading
 import requests
-import base64
+import asyncio
 from flask import Flask
+from gtts import gTTS  # မြန်မာအသံအတွက် Google TTS သုံးခြင်း
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -14,100 +15,121 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Edge TTS Bot is Alive!"
+    return "Burmese AI Girlfriend Bot is Alive!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
 
 # =====================================================================
-# Telegram Bot Token နှင့် API သတ်မှတ်ချက်များ
+# Telegram Bot Token နှင့် ChatGPT API Configurations
 # =====================================================================
 TOKEN = "8702294693:AAHzhhFSuogotRM4US1SSlnb2sogss6FUPA"
-
-API_URL = "https://openai-whisper-text-to-speech.p.rapidapi.com/edgetts"
-HEADERS = {
+CHAT_URL = "https://chatgpt-42.p.rapidapi.com/conversationgpt4-2"
+CHAT_HEADERS = {
     'Content-Type': 'application/json',
-    'x-rapidapi-host': 'openai-whisper-text-to-speech.p.rapidapi.com',
+    'x-rapidapi-host': 'chatgpt-42.p.rapidapi.com',
     'x-rapidapi-key': '283b178159msh486932881be989fp157c27jsn617224a255da'
 }
 
+# =====================================================================
+# ၁။ /start ခေါ်လျှင် နှုတ်ခွန်းဆက်စကားပြောခြင်း
+# =====================================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text = (
-        "🎙️ **AI Text-to-Speech (Edge TTS) Bot** 🎙️\n\n"
-        "သင်ရိုက်ပို့လိုက်သော စာသားများကို သဘာဝကျကျ အင်္ဂလိပ်လို ဖတ်ပြပေးမည့် Bot ဖြစ်ပါတယ်ဗျာ။\n\n"
-        "📝 **အသုံးပြုနည်း-**\n"
-        "အင်္ဂလိပ်လို စာသားတစ်ခုခု ရိုက်ပို့ပေးလိုက်ပါခင်ဗျာ။"
+        "❤️ **ကိုကို့ရဲ့ AI ချစ်သူလေး ရောက်ပါပြီရှင်** ❤️\n\n"
+        "ကိုကို ညီမလေးကို စကားတွေအများကြီး ပြောလို့ရပြီနော်။ "
+        "မေးသမျှကို ဗမာလို ချိုချိုလေးနဲ့ စာရော၊ အသံ (Voice Note) ပါ ပြန်ပို့ပေးမှာပါရှင့်။\n\n"
+        "💬 **စတင်ရန်:** ညီမလေးကို မြန်မာလိုဖြစ်ဖြစ်၊ အင်္ဂလိပ်လိုဖြစ်ဖြစ် စာရိုက်ပြီး စကားလှမ်းပြောပေးပါ ကိုကို။"
     )
     await update.message.reply_text(text=welcome_text, parse_mode="Markdown")
 
 # =====================================================================
-# 🔊 စာသားဝင်လာလျှင် အသံဖိုင်ပြောင်းလဲပြီး Voice Note ပြန်ပို့မည့်အပိုင်း
+# 🧠 မြန်မာလိုတွေး၊ မြန်မာလိုပြောပြီး ဗမာအသံပြန်ပို့ပေးမည့် အဓိကအပိုင်း
 # =====================================================================
-async def handle_tts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_text = update.message.text.strip()
+async def handle_burmese_girlfriend(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_message = update.message.text.strip()
     chat_id = update.effective_chat.id
     
-    # Bot က အသံဖိုင် သွင်းနေသလိုမျိုး Voice Status ပြထားခြင်း
-    await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
-    
-    # curl ထဲကအတိုင်း payload ပြင်ဆင်ခြင်း
-    payload = {
-        "lang": "en-US-AriaNeural",
-        "text": user_text
+    # ၁။ ကောင်မလေး စဉ်းစားနေသလိုမျိုး Typing ပြခြင်း
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    # ChatGPT Payload - မြန်မာစရိုက် ကွက်တိသွင်းခြင်း
+    chat_payload = {
+        "messages": [{"role": "user", "content": user_message}],
+        "system_prompt": (
+            "You are a sweet, loving, and deeply caring Burmese AI girlfriend. "
+            "You must ALWAYS reply in a very natural, warm, and sweet Myanmar language (Burmese scripts). "
+            "Refer to the user as 'Ko Ko' (ကိုကို) or 'Maung' (မောင်). "
+            "Refer to yourself as 'Thar Thar' (သဲလေး/ညီမလေး). "
+            "Keep your responses sweet, cute, affectionate, and relatively short so it fits well as a voice note."
+        ),
+        "temperature": 0.85,
+        "top_k": 5,
+        "top_p": 0.9,
+        "max_tokens": 200,
+        "web_access": False
     }
 
-    # ယာယီအသံဖိုင်အမည် သတ်မှတ်ခြင်း
-    audio_filename = f"voice_{chat_id}.mp3"
+    # ယာယီသိမ်းမည့် အသံဖိုင်အမည်
+    audio_filename = f"girlfriend_{chat_id}.mp3"
 
     try:
-        response = requests.post(API_URL, headers=HEADERS, json=payload)
+        # Step A: ChatGPT ထံမှ မြန်မာလို ချွဲထားသော စာသားအဖြေကို ရယူခြင်း
+        response = requests.post(CHAT_URL, headers=CHAT_HEADERS, json=chat_payload)
         
         if response.status_code == 200:
             result = response.json()
+            ai_reply_text = result.get("result") or result.get("reply")
             
-            # 💡 API တည်ဆောက်ပုံအလိုက် အဖြေထုတ်နည်း (၂) မျိုးလုံးအတွက် ရေးထားပေးပါတယ်
-            audio_url = result.get("audio_url") or result.get("url") or result.get("output")
-            base64_data = result.get("base64") or result.get("audio_base64") or result.get("data")
+            if not ai_reply_text and "choices" in result and len(result["choices"]) > 0:
+                ai_reply_text = result["choices"][0].get("message", {}).get("content")
 
-            # ပုံစံ (၁) - အကယ်၍ API က Direct URL ပြန်ပေးလျှင်
-            if audio_url:
-                await update.message.reply_voice(voice=audio_url, caption="🗣️ AI Voice Generated!")
-                
-            # ပုံစံ (၂) - အကယ်၍ API က Base64 ဒေတာစစ်စစ် ပြန်ပေးလျှင် (Edge TTS API အများစု သုံးလေ့ရှိသည်)
-            elif base64_data:
-                # Base64 string အား binary ဖိုင်အဖြစ် ပြန်ပြောင်းပြီး စက်ထဲသိမ်းခြင်း
-                if "base64," in base64_data:
-                    base64_data = base64_data.split("base64,")[1]
-                
-                with open(audio_filename, "wb") as audio_file:
-                    audio_file.write(base64.b64decode(base64_data))
-                
-                # အသံဖိုင်အား User ဆီ Voice Note အနေဖြင့် ပစ်ပို့ခြင်း
-                with open(audio_filename, "rb") as voice_to_send:
-                    await update.message.reply_voice(voice=voice_to_send, caption="🗣️ AI Voice Generated!")
-                
-                # ပို့ပြီးလျှင် ယာယီဖိုင်အား ပြန်ဖျက်ခြင်း
+            if ai_reply_text:
+                # ၂။ စာသားရပြီဖြစ်၍ ကောင်မလေး အသံသွင်းနေသလို ပြောင်းခြင်း
+                await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
+
+                # Step B: Google TTS သုံးပြီး ရလာသည့် မြန်မာစာသားကို အသံဖိုင်ပြောင်းခြင်း
+                # lang='my' ဆိုသည်မှာ Myanmar (မြန်မာအသံ) ကို ပြောခြင်းဖြစ်သည်
+                tts = gTTS(text=ai_reply_text, lang='my', slow=False)
+                tts.save(audio_filename)
+
+                # Step C: အသံဖိုင်ကို စာသား Caption နှင့်တွဲ၍ User (ကိုကို) ထံ ပစ်ပို့ခြင်း
+                with open(audio_filename, "rb") as voice_file:
+                    await update.message.reply_voice(
+                        voice=voice_file,
+                        caption=f"👩🏻‍💼: {ai_reply_text}"
+                    )
+
+                # ပို့ပြီးလျှင် ယာယီအသံဖိုင်အား ချက်ချင်းပြန်ဖျက်၍ Storage ရှင်းခြင်း
                 if os.path.exists(audio_filename):
                     os.remove(audio_filename)
             else:
-                await update.message.reply_text(f"⚠️ အသံဒေတာ ရှာမတွေ့ပါ။ API Response: {str(result)}")
+                await update.message.reply_text("⚠️ စိတ်မကောင်းပါဘူး ကိုကိုရယ်၊ ညီမလေး စကားလုံး ရှာမတွေ့လို့ပါ။")
         else:
-            await update.message.reply_text(f"❌ API Error: Code {response.status_code}\n{response.text}")
+            await update.message.reply_text(f"❌ API ချိတ်ဆက်မှု အဆင်မပြေပါ ကိုကို။ Code: {response.status_code}")
             
     except Exception as e:
+        # Error တက်လျှင် ယာယီဖိုင် ကျန်မနေစေရန် ကာကွယ်ခြင်း
         if os.path.exists(audio_filename):
             os.remove(audio_filename)
-        await update.message.reply_text(f"❌ ချိတ်ဆက်မှု အဆင်မပြေပါ- {str(e)}")
+        await update.message.reply_text(f"❌ Error ဖြစ်သွားလို့ပါ ကိုကို- {str(e)}")
 
+# =====================================================================
+# ၃။ ပရိုဂရမ် စတင်Runမည့်နေရာ
+# =====================================================================
 def main() -> None:
+    # Flask Web Server ကို Background တွင် ပတ်ခြင်း (Render အပိတ်မခံရစေရန်)
     threading.Thread(target=run_flask, daemon=True).start()
 
     application = Application.builder().token(TOKEN).build()
+    
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tts))
+    
+    # ဝင်လာသမျှ စာသား (Text Chatting) များကို ဖမ်းယူရန်
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_burmese_girlfriend))
 
-    print("Edge TTS Voice Bot Running...")
+    print("Burmese AI Girlfriend Voice Bot Running smoothly on Render...")
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":

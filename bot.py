@@ -9,7 +9,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # --- Config ---
-API_TOKEN = '8702294693:AAGbo2lTWP-aV1jV8Be6nN5NSnz2WO_aZJk'
+API_TOKEN = '8702294693:AAHzhhFSuogotRM4US1SSlnb2sogss6FUPA'
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)

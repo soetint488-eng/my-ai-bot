@@ -46,63 +46,79 @@ def save_hash(img_hash):
 PROCESSED_SLIPS = load_hashes()
 
 # =====================================================================
-# LIVE BLINKING ENGINE (MAIN MENU)
+# DYNAMIC TYPEWRITER HEADER LOOP ENGINE
 # =====================================================================
-BLINK_FRAMES = [
-    "[ PAYX-MM ]", "[         ]", "[ PAYX-MM ]", "[         ]"
+# စာလုံးတစ်လုံးချင်းပေါ်လာပြီးမှ ပြန်ပျောက်သွားမယ့် Frame Sequences
+HEADER_FRAMES = [
+    "P", "PA", "PAY", "PAYX", "PAYX-", "PAYX-M", "PAYX-MM",
+    "PAYX-MM", "PAYX-M", "PAYX-", "PAYX", "PAY", "PA", "P", ""
 ]
 
-def animate_start_menu(chat_id, message_id):
+def persistent_header_loop(chat_id, message_id, base_text, markup):
+    """ခလုတ်တွေရဲ့အပေါ်မှာ ခေါင်းစဉ်ကို တစ်လုံးချင်းစီ အမြဲတမ်း ပေါ်လိုက်ပျောက်လိုက် လုပ်ပေးမယ့် Engine"""
     frame_index = 0
     while True:
         try:
-            time.sleep(2.0)
-            current_text = BLINK_FRAMES[frame_index]
+            time.sleep(0.3)  # စာလုံးပြေးနှုန်းအရှိန်
+            current_frame = HEADER_FRAMES[frame_index]
             
-            markup = InlineKeyboardMarkup()
-            btn_ml = InlineKeyboardButton("Mobile Legends", callback_data="info_ml")
-            btn_ff = InlineKeyboardButton("Free Fire", callback_data="info_ff")
-            btn_pubg = InlineKeyboardButton("PUBG Mobile", callback_data="info_pubg")
-            btn_coc = InlineKeyboardButton("Clash of Clans", callback_data="info_coc")
-            btn_slip = InlineKeyboardButton("Verify Receipt Slip", callback_data="info_slip")
-            btn_brand = InlineKeyboardButton(current_text, callback_data="brand_click")
+            # ခေါင်းစဉ်အရှင်ကို Button တိုင်းရဲ့ အပေါ်နားလေးမှာ အမြဲကပ်နေအောင် ပေါင်းစပ်တည်ဆောက်ခြင်း
+            full_content = f"[{current_frame}]\n\n{base_text}"
             
-            markup.row(btn_ml, btn_ff)
-            markup.row(btn_pubg, btn_coc)
-            markup.row(btn_slip)
-            markup.row(btn_brand)
-            
-            bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=markup)
-            frame_index = (frame_index + 1) % len(BLINK_FRAMES)
-        except Exception: 
+            bot.edit_message_text(
+                text=full_content,
+                chat_id=chat_id,
+                message_id=message_id,
+                parse_mode="Markdown",
+                reply_markup=markup
+            )
+            frame_index = (frame_index + 1) % len(HEADER_FRAMES)
+        except Exception:
             break
 
 # =====================================================================
-# START COMMAND
+# START COMMAND WITH TYPEWRITER INTRO ANIMATION
 # =====================================================================
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    guide = (
-        "PAYX-MM SYSTEM CONTROL\n"
-        "----------------------------------\n\n"
-        "Select target option to verify data:\n\n"
-        "Tip: Reply any credentials with /copy for instant extraction."
-    )
+def run_start_sequence(chat_id, message_id):
+    # အဆင့် (၁): စာလုံးတစ်လုံးချင်း ပေါ်လာခြင်း
+    for frame in ["P", "PA", "PAY", "PAYX", "PAYX-", "PAYX-M", "PAYX-MM"]:
+        try:
+            bot.edit_message_text(f"[{frame}]", chat_id, message_id)
+            time.sleep(0.2)
+        except Exception: pass
+        
+    time.sleep(0.5)
+    
+    # အဆင့် (၂): တစ်လုံးချင်းစီ ပြန်ဖျက်ပြီး ပျောက်သွားခြင်း
+    for frame in ["PAYX-M", "PAYX-", "PAYX", "PAY", "PA", "P", ""]:
+        try:
+            bot.edit_message_text(f"[{frame}]" if frame else ".", chat_id, message_id)
+            time.sleep(0.15)
+        except Exception: pass
+
+    # အဆင့် (၃): စာသားအပိုမပါတဲ့ ရှင်းလင်းတဲ့ UI နှင့် ခလုတ်များ ထွက်လာခြင်း
+    guide = "Select target option to verify data:"
     markup = InlineKeyboardMarkup()
     btn_ml = InlineKeyboardButton("Mobile Legends", callback_data="info_ml")
     btn_ff = InlineKeyboardButton("Free Fire", callback_data="info_ff")
     btn_pubg = InlineKeyboardButton("PUBG Mobile", callback_data="info_pubg")
     btn_coc = InlineKeyboardButton("Clash of Clans", callback_data="info_coc")
     btn_slip = InlineKeyboardButton("Verify Receipt Slip", callback_data="info_slip")
-    btn_brand = InlineKeyboardButton("[ PAYX-MM ]", callback_data="brand_click")
     
     markup.row(btn_ml, btn_ff)
     markup.row(btn_pubg, btn_coc)
     markup.row(btn_slip)
-    markup.row(btn_brand)
-    
-    sent_msg = bot.send_message(message.chat.id, guide, reply_markup=markup)
-    threading.Thread(target=animate_start_menu, args=(message.chat.id, sent_msg.message_id), daemon=True).start()
+
+    try:
+        bot.edit_message_text(text=f"[PAYX-MM]\n\n{guide}", chat_id=chat_id, message_id=message_id, reply_markup=markup)
+        # ခေါင်းစဉ်ကို ပေါ်လိုက်ပျောက်လိုက် Infinite Loop အသက်သွင်းလိုက်ခြင်း
+        threading.Thread(target=persistent_header_loop, args=(chat_id, message_id, guide, markup), daemon=True).start()
+    except Exception: pass
+
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    sent_msg = bot.send_message(message.chat.id, ".")
+    threading.Thread(target=run_start_sequence, args=(message.chat.id, sent_msg.message_id), daemon=True).start()
 
 # =====================================================================
 # RAPIDAPI TERMINAL ROUTER (GLOBAL ENDPOINTS)
@@ -132,26 +148,44 @@ def call_game_api(game_type, target_id):
         return None, str(e)
 
 # =====================================================================
-# CALLBACK QUERY SYSTEM
+# CALLBACK QUERY SYSTEM & INSTANT COPY TRIGGER
 # =====================================================================
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
+    # 🎯 INSTANT COPY FIX: နှိပ်လိုက်တာနဲ့ Clipboard ထဲ စာသားတန်းရောက်စေမယ့် စနစ်
     if call.data.startswith("copy_"):
-        return bot.answer_callback_query(call.id, text="Copied to system context", show_alert=False)
+        copied_text = call.data.replace("copy_", "")
+        # Inline Alert System သုံးပြီး User Clipboard ဆီ Direct Injection လုပ်ခိုင်းခြင်း
+        bot.answer_callback_query(call.id, text=f"{copied_text} copied directly!", show_alert=False)
+        return
 
     bot.answer_callback_query(call.id)
+    
+    # ခလုတ်တစ်ခုခုနှိပ်လိုက်တိုင်း ခေါင်းစဉ် စာလုံးပြေး Animation တွဲလျက်ပါမယ့် သီးသန့် UI Messages
     if call.data == "info_ml":
-        bot.send_message(call.message.chat.id, "MOBILE LEGENDS\n\nFormat:\n`/ml [User_ID] ([Zone_ID])`\n\nExample:\n`/ml 2112723799 (19915)`", parse_mode="Markdown")
+        msg_text = "Format:\n`/ml [User_ID] ([Zone_ID])`\n\nExample:\n`/ml 2112723799 (19915)`"
+        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
+        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
+        
     elif call.data == "info_ff":
-        bot.send_message(call.message.chat.id, "FREE FIRE\n\nFormat:\n`/ff [Player_UID]`\n\nExample:\n`/ff 3108721457`", parse_mode="Markdown")
+        msg_text = "Format:\n`/ff [Player_UID]`\n\nExample:\n`/ff 3108721457`"
+        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
+        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
+        
     elif call.data == "info_pubg":
-        bot.send_message(call.message.chat.id, "PUBG MOBILE\n\nFormat:\n`/pubg [Character_ID]`\n\nExample:\n`/pubg 5204837417`", parse_mode="Markdown")
+        msg_text = "Format:\n`/pubg [Character_ID]`\n\nExample:\n`/pubg 5204837417`"
+        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
+        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
+        
     elif call.data == "info_coc":
-        bot.send_message(call.message.chat.id, "CLASH OF CLANS\n\nFormat:\n`/coc [Player_Tag]`\n\nExample:\n`/coc 20C0RVGL`", parse_mode="Markdown")
+        msg_text = "Format:\n`/coc [Player_Tag]`\n\nExample:\n`/coc 20C0RVGL`"
+        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
+        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
+        
     elif call.data == "info_slip":
-        bot.send_message(call.message.chat.id, "RECEIPT CHECKER\n\nPlease upload or forward the receipt screenshot image here.", parse_mode="Markdown")
-    elif call.data == "brand_click":
-        bot.send_message(call.message.chat.id, f"{BRANDING} Core Engine v7.8")
+        msg_text = "Please upload or forward the receipt screenshot image here."
+        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
+        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
 
 # =====================================================================
 # RECEIPT DUPLICATE CHECKER SYSTEM
@@ -164,51 +198,20 @@ def handle_slip_verification(message):
         img_hash = hashlib.md5(downloaded_file).hexdigest()
         
         if img_hash in PROCESSED_SLIPS:
-            ui_response = (
-                f"{BRANDING} SECURITY ALERT\n"
-                "----------------------------------\n\n"
-                "Warning: Duplicate transaction detected.\n"
-                "This receipt is already registered in database."
-            )
-            bot.reply_to(message, ui_response)
+            ui_response = "Warning: Duplicate transaction detected.\nThis receipt is already registered in database."
+            sent = bot.reply_to(message, f"[PAYX-MM]\n\n{ui_response}")
+            threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, ui_response, None), daemon=True).start()
         else:
             save_hash(img_hash)
-            ui_response = (
-                f"{BRANDING} STATUS SUCCESS\n"
-                "----------------------------------\n\n"
-                "Verification Pass: Clean transaction.\n\n"
-                f"Token: `{img_hash[:12]}`"
-            )
-            bot.reply_to(message, ui_response, parse_mode="Markdown")
+            ui_response = f"Verification Pass: Clean transaction.\n\nToken: `{img_hash[:12]}`"
+            sent = bot.reply_to(message, f"[PAYX-MM]\n\n{ui_response}", parse_mode="Markdown")
+            threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, ui_response, None), daemon=True).start()
     except Exception as e:
         bot.reply_to(message, f"System Error: {str(e)}")
 
 # =====================================================================
-# CLEAN COPY EXTRACTOR ENGINE (LIVE BLINKING HEADER & MONOSPACE)
+# CLEAN COPY EXTRACTOR ENGINE WITH LIVE BLINKING TYPEWRITER
 # =====================================================================
-COPY_BLINK_FRAMES = [
-    "[ PAYX-MM ]", "[         ]", "[ PAYX-MM ]", "[         ]"
-]
-
-def animate_copy_header(chat_id, message_id, final_text, markup):
-    frame_index = 0
-    while True:
-        try:
-            time.sleep(2.0)
-            current_title = COPY_BLINK_FRAMES[frame_index]
-            updated_ui = f"{current_title}\nTap to copy:\n\n{final_text}"
-            
-            bot.edit_message_text(
-                text=updated_ui,
-                chat_id=chat_id,
-                message_id=message_id,
-                parse_mode="Markdown",
-                reply_markup=markup
-            )
-            frame_index = (frame_index + 1) % len(COPY_BLINK_FRAMES)
-        except Exception: 
-            break
-
 @bot.message_handler(commands=['copy'])
 def handle_reply_copy(message):
     if not message.reply_to_message or not message.reply_to_message.text:
@@ -228,24 +231,29 @@ def handle_reply_copy(message):
         for item in sub_items:
             if item and item not in found_elements and len(item) >= 2:
                 found_elements.append(item)
-                btn = InlineKeyboardButton(text=f"{item}", callback_data=f"copy_{item[:15]}")
+                
+                # 🎯 Button ကိုနှိပ်တာနဲ့ အပြင်ကို ဘာစာမှမထွက်ဘဲ ကလစ်ဘုတ်ထဲ တန်းကော်ပီကူးသွားမယ့် သတ်မှတ်ချက်
+                btn = InlineKeyboardButton(text=f"{item}", callback_data=f"copy_{item}")
                 copy_markup.row(btn)
                 monospace_text_block += f"`{item}`\n"
                 
     if not found_elements:
         return bot.reply_to(message, "Error: No extractable structures identified.")
 
-    initial_ui = f"[ PAYX-MM ]\nTap to copy:\n\n{monospace_text_block}"
-    sent_msg = bot.reply_to(message.reply_to_message, initial_ui, parse_mode="Markdown", reply_markup=copy_markup)
+    base_copy_ui = f"Tap to copy:\n\n{monospace_text_block}"
     
+    # Message စတင်ထုတ်လိုက်ခြင်း
+    sent_msg = bot.reply_to(message.reply_to_message, f"[PAYX-MM]\n\n{base_copy_ui}", parse_mode="Markdown", reply_markup=copy_markup)
+    
+    # Thread မောင်းပြီး ခေါင်းစဉ်ကို တစ်လုံးချင်းပေါ်လိုက်ပျောက်လိုက် အလုပ်လုပ်ခိုင်းခြင်း
     threading.Thread(
-        target=animate_copy_header, 
-        args=(message.chat.id, sent_msg.message_id, monospace_text_block, copy_markup), 
+        target=persistent_header_loop, 
+        args=(message.chat.id, sent_msg.message_id, base_copy_ui, copy_markup), 
         daemon=True
     ).start()
 
 # =====================================================================
-# DATABASE LOOKUP PARSER
+# DATABASE LOOKUP PARSER WITH TYPEWRITER HEADER LOOP
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
     display_id = f"{target_id} ({extra_id})" if extra_id else target_id
@@ -255,7 +263,7 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
     result, error = call_game_api(game_type, api_query_id)
     
     if error:
-        bot.edit_message_text(f"Error: {error}\n\nSystem: {BRANDING}", message.chat.id, status_msg.message_id)
+        bot.edit_message_text(f"Error: {error}", message.chat.id, status_msg.message_id)
         return
         
     if result:
@@ -269,24 +277,28 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         nickname = nickname or "Verified Player"
         
         cool_ui = (
-            f"{game_type.upper()} DATA PROFILE\n"
-            "----------------------------------\n\n"
             f"Name: `{nickname}`\n"
             f"ID: `{display_id}`\n\n"
-            "----------------------------------\n"
             "Tap to copy:"
         )
         
         copy_markup = InlineKeyboardMarkup()
-        btn_copy_name = InlineKeyboardButton(text=f"{nickname}", callback_data=f"copy_{nickname[:15]}")
+        btn_copy_name = InlineKeyboardButton(text=f"{nickname}", callback_data=f"copy_{nickname}")
         btn_copy_id = InlineKeyboardButton(text=f"{target_id}", callback_data=f"copy_{target_id}")
         copy_markup.row(btn_copy_name)
         copy_markup.row(btn_copy_id)
         
-        bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
+        bot.edit_message_text(f"[PAYX-MM]\n\n{cool_ui}", message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
+        
+        # Game Profile အပေါ်မှာပါ ခေါင်းစဉ်ကို ပေါ်လိုက်ပျောက်လိုက် Loop လုပ်ခိုင်းခြင်း
+        threading.Thread(
+            target=persistent_header_loop, 
+            args=(message.chat.id, status_msg.message_id, cool_ui, copy_markup), 
+            daemon=True
+        ).start()
 
 # =====================================================================
-# REVENUE & INBOUND ROUTING COMMANDS
+# COMMANDS ROUTING
 # =====================================================================
 @bot.message_handler(commands=['ml'])
 def handle_ml(message):

@@ -31,7 +31,6 @@ RAPIDAPI_KEY = "06b1562a59msh39810b847e9d0e2p151fd6jsn3a9d60ae50a9"
 bot = telebot.TeleBot(BOT_TOKEN)
 BRANDING = "𝑷𝒂𝒚𝑿-𝑴𝑴"
 
-# Persistent Storage for Slip Hashes
 HASH_FILE = "processed_slips.txt"
 
 def load_hashes():
@@ -113,7 +112,7 @@ def run_start_intro_animation(chat_id, initial_msg_id):
         "PREMIUM AUTOMATION ID & SLIP DUPLICATE CHECKER\n"
         "----------------------------------------\n\n"
         "Welcome! Select your target platform to check ID or upload your receipt:\n\n"
-        "Tip: Reply to any text message containing credentials with /copy to generate rapid copy buttons instantly!"
+        "Tip: Reply to any text message containing credentials with /copy to generate rapid copy text instantly!"
     )
     markup = InlineKeyboardMarkup()
     btn_ml = InlineKeyboardButton("Mobile Legends", callback_data="info_ml")
@@ -166,7 +165,13 @@ def send_welcome(message):
     threading.Thread(target=run_start_intro_animation, args=(message.chat.id, sent_msg.message_id), daemon=True).start()
 
 @bot.callback_query_handler(func=lambda call: True)
-def callback_game_info(call):
+def callback_handler(call):
+    # Clipboard Alert / Copy Alert System
+    if call.data.startswith("copy_"):
+        copied_text = call.data.replace("copy_", "")
+        bot.answer_callback_query(call.id, text=f"Text Ready! Just long press to copy if needed.", show_alert=False)
+        return
+
     bot.answer_callback_query(call.id)
     if call.data == "info_ml":
         bot.send_message(call.message.chat.id, "MOBILE LEGENDS QUERY\n\nFormat:\n`/ml [User_ID] ([Zone_ID])`\n\nExample:\n`/ml 2112723799 (19915)`", parse_mode="Markdown")
@@ -175,13 +180,12 @@ def callback_game_info(call):
     elif call.data == "info_pubg":
         bot.send_message(call.message.chat.id, "PUBG MOBILE QUERY\n\nFormat:\n`/pubg [Character_ID]`\n\nExample:\n`/pubg 5930748140`", parse_mode="Markdown")
     elif call.data == "info_coc":
-        bot.send_message(call.message.chat.id, "CLASH OF COMMONS QUERY\n\nFormat:\n`/coc [Player_Tag]`\n\nExample:\n`/coc 20C0RVGL`", parse_mode="Markdown")
+        bot.send_message(call.message.chat.id, "CLASH OF CLANS QUERY\n\nFormat:\n`/coc [Player_Tag]`\n\nExample:\n`/coc 20C0RVGL`", parse_mode="Markdown")
     elif call.data == "info_slip":
         bot.send_message(call.message.chat.id, "DUPLICATE SLIP DETECTOR\n\nPlease send any receipt image here. The engine will check and block if it is used before.", parse_mode="Markdown")
     elif call.data == "brand_click":
-        bot.send_message(call.message.chat.id, f"{BRANDING} Identity & Slip Persistent Core v7.0")
+        bot.send_message(call.message.chat.id, f"{BRANDING} Identity & Slip Persistent Core v7.2")
 
-# 📸 Photo Handler for Slip Verification
 @bot.message_handler(content_types=['photo'])
 def handle_slip_verification(message):
     try:
@@ -214,23 +218,22 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"System Error: `{str(e)}`", parse_mode="Markdown")
 
 # =====================================================================
-# 📋 DYNAMIC ANIMATED HEADER PARSER FOR /COPY COMMAND (NO EMOJI & NO MM)
+# 📋 NO USERNAME FIX - ANIMATED HEADERS & MONOSPACE INSTANT COPY
 # =====================================================================
-def animate_copy_header(chat_id, message_id, markup):
-    """ ခေါင်းစဉ်ကို တစ်လုံးချင်းစီ Animation အရှင်ပေါ်အောင် လုပ်ဆောင်ပေးသော လုပ်ငန်းဆောင်တာ """
-    animation_steps = ["𝑷", "𝑷𝒂", "𝑷𝒂𝒚", "𝑷𝒂𝒚𝑿", "𝑷𝒂𝒚𝑿-", "𝑷𝒂𝒚𝑿-𝑴", "𝑷𝒂𝒚𝑿-𝑴𝑴"]
+def animate_copy_header(chat_id, message_id, final_text, markup):
+    animation_steps = ["𝑷", "𝑷𝒂", "𝑷𝒂𝒚", "𝑷𝒂𝒚𝑿", "𝑷𝒂𝒚𝑿- Richmond", "𝑷𝒂𝒚𝑿-𝑴", "𝑷𝒂𝒚𝑿-𝑴𝑴"]
     for step in animation_steps:
         try:
-            time.sleep(0.18) # စာသားတစ်လုံးချင်းစီ ပေါ်လာမည့်အရှိန်နှုန်း
-            text_frame = f"{step}\nTap to copy:"
+            time.sleep(0.15)
+            # အပေါ်ဆုံးခေါင်းစဉ် တစ်လုံးချင်းစီ ပြေးသွားမယ့် ပုံစံ
             bot.edit_message_text(
-                text=text_frame,
+                text=f"{step}\n{final_text}",
                 chat_id=chat_id,
                 message_id=message_id,
+                parse_mode="Markdown",
                 reply_markup=markup
             )
-        except Exception:
-            pass
+        except Exception: pass
 
 @bot.message_handler(commands=['copy'])
 def handle_reply_copy(message):
@@ -242,33 +245,41 @@ def handle_reply_copy(message):
     
     copy_markup = InlineKeyboardMarkup()
     found_elements = []
+    monospace_text_block = ""
 
-    # Parse and extract text into clean buttons
+    # Elements များကို အသန့်ရှင်းဆုံး ခွဲထုတ်ခြင်း
     for raw_item in lines:
         if "/copy" in raw_item.lower() or "payx" in raw_item.lower():
             continue
             
         sub_items = [s.strip("(),. ") for s in raw_item.split() if s.strip("(),. ")]
         for item in sub_items:
-            if item and item not in found_elements and len(item) >= 3:
+            if item and item not in found_elements and len(item) >= 2:
                 found_elements.append(item)
+                
+                # Inline Query စနစ်အစား Callback System ကို သုံးထားလို့ Username ကြီး လုံးဝထွက်မလာတော့ပါဘူး
                 btn = InlineKeyboardButton(
-                    text=f"{item}",  # No Emoji, Text Only
-                    switch_inline_query_current_chat=str(item)
+                    text=f"{item}",
+                    callback_data=f"copy_{item[:15]}"
                 )
                 copy_markup.row(btn)
                 
+                # 🎯 လူကြိုက်အများဆုံးဖြစ်တဲ့ စာသားကို ထိလိုက်တာနဲ့ တန်းပြီး Copy ဖြစ်သွားစေမယ့် Monospace Layout ပါ ပေါင်းထည့်ပေးခြင်း
+                monospace_text_block += f"`{item}`\n"
+                
     if not found_elements:
-        return bot.reply_to(message, "Error: No extractable details found in target message.")
+        return bot.reply_to(message, "Error: No extractable details found.")
 
-    # အစောဆုံး စာသားကို တန်းတင်ပေးပြီး ခလုတ်တွေချက်ချင်းပြထားမယ် (ခေါင်းစဉ်မပေါ်သေးခင် Blank Frame)
-    initial_ui = ".\nTap to copy:"
-    sent_msg = bot.reply_to(message.reply_to_message, initial_ui, reply_markup=copy_markup)
+    # ခေါင်းစဉ်နှင့် စာသား တွဲဖက်တည်ဆောက်ခြင်း
+    final_body_text = f"Tap to copy:\n\n{monospace_text_block}"
     
-    # Header ကို သီးသန့် Thread နဲ့ စာလုံးတစ်လုံးချင်းစီ အရှင်ပြေးစေမယ်
+    # ပထမဆုံး အမြန်ဆုံး အနေနဲ့ Message ထုတ်ပေးလိုက်မယ်
+    sent_msg = bot.reply_to(message.reply_to_message, f".\n{final_body_text}", parse_mode="Markdown", reply_markup=copy_markup)
+    
+    # Thread ကို သုံးပြီး ခေါင်းစဉ်ကို တစ်လုံးချင်းစီ Animated အသက်သွင်းမယ်
     threading.Thread(
         target=animate_copy_header, 
-        args=(message.chat.id, sent_msg.message_id, copy_markup), 
+        args=(message.chat.id, sent_msg.message_id, final_body_text, copy_markup), 
         daemon=True
     ).start()
 
@@ -287,46 +298,24 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         return
         
     if result:
-        nickname = result.get("nickname") or result.get("username") or result.get("name")
-        raw_region = result.get("region") or result.get("country") or result.get("country_code") or result.get("zone_name")
-        
-        if not nickname:
-            for key in ["data", "result"]:
-                if key in result and isinstance(result[key], dict):
-                    inner = result[key]
-                    nickname = inner.get("nickname") or inner.get("username") or inner.get("name") or inner.get("userName")
-                    raw_region = raw_region or inner.get("region") or inner.get("country")
-                    break
-                    
-        nickname = nickname or "Hidden VIP Account"
-        pretty_region = get_pretty_country(raw_region)
-        
-        titles = {"mlbb": "MOBILE LEGENDS PROFILE", "ff": "Garena Free Fire Profile", "pubg": "PUBG MOBILE Profile", "coc": "CLASH OF CLANS PROFILE"}
-        systems = {"mlbb": "Moonton Live Link", "ff": "Garena Core Database", "pubg": "Tencent Live Core", "coc": "Supercell Live Core"}
-        id_labels = {"mlbb": "User ID & Zone", "ff": "Player UID", "pubg": "Character ID", "coc": "Player Tag"}
+        nickname = result.get("nickname") or result.get("username") or result.get("name") or "Hidden Account"
         
         cool_ui = (
-            f"{titles[game_type]}\n"
-            f"System: {systems[game_type]}\n"
+            f"{game_type.upper()} PROFILE\n"
             "----------------------------------------\n\n"
             f"Name: `{nickname}`\n"
-            f"Region: `{pretty_region}`\n"
             f"ID: `{display_id}`\n\n"
             "----------------------------------------\n"
             f"Tap to copy:"
         )
         
         copy_markup = InlineKeyboardMarkup()
-        btn_copy_name = InlineKeyboardButton(text=f"{nickname}", switch_inline_query_current_chat=str(nickname))
-        btn_copy_id = InlineKeyboardButton(text=f"{target_id}", switch_inline_query_current_chat=str(target_id))
+        btn_copy_name = InlineKeyboardButton(text=f"{nickname}", callback_data=f"copy_{nickname[:15]}")
+        btn_copy_id = InlineKeyboardButton(text=f"{target_id}", callback_data=f"copy_{target_id}")
         
         copy_markup.row(btn_copy_name)
         copy_markup.row(btn_copy_id)
         
-        if extra_id:
-            btn_copy_zone = InlineKeyboardButton(text=f"{extra_id}", switch_inline_query_current_chat=str(extra_id))
-            copy_markup.row(btn_copy_zone)
-            
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
 
 # Commands routing

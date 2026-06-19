@@ -28,7 +28,7 @@ def run_flask():
 BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
 RAPIDAPI_KEY = "06b1562a59msh39810b847e9d0e2p151fd6jsn3a9d60ae50a9"
 
-# 🔑 ကိုကို့ရဲ့ Key အသစ်စက်စက်
+# 🔑 ကိုကို့ရဲ့ Key အမှန်
 GEMINI_API_KEY = "AQ.Ab8RN6JfFCYCkroYojWX_EV4X9I4q99xfnxgie6JrW8YQuIAJQ"
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -156,10 +156,11 @@ def call_game_api(game_type, target_id):
     except Exception as e: return None, str(e)
 
 # =====================================================================
-# 🧠 GEMINI AI VISION RECEIPT AUDITOR ENGINE (Fixed Payload Syntax)
+# 🧠 GEMINI AI VISION RECEIPT AUDITOR ENGINE (Fixed 401 Auth)
 # =====================================================================
 def call_gemini_vision_api(image_bytes):
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    # 🌟 FIX: API Key ကို Header မှာမထည့်ဘဲ URL Parameter ?key= အဖြစ် ပြောင်းလဲတွဲပေးလိုက်ပါတယ်
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     
     prompt = (
@@ -174,7 +175,6 @@ def call_gemini_vision_api(image_bytes):
         "Make it look premium, neat, and clean for a Telegram bot response."
     )
     
-    # ✨ FIXED: mime_type အမှန်အတိုင်း သတ်မှတ်ထားပါတယ်
     payload = {
         "contents": [
             {
@@ -192,8 +192,7 @@ def call_gemini_vision_api(image_bytes):
     }
     
     headers = {
-        "Content-Type": "application/json",
-        "X-goog-api-key": GEMINI_API_KEY
+        "Content-Type": "application/json"
     }
     
     try:
@@ -202,7 +201,7 @@ def call_gemini_vision_api(image_bytes):
             res_json = response.json()
             return res_json['candidates'][0]['content']['parts'][0]['text']
         else:
-            return f"❌ API Error (Status: {response.status_code})\nတုံ့ပြန်မှုချက်- {response.text}"
+            return f"❌ API Error (Status: {response.status_code})\nတုံ့ပြန်မှု- {response.text}"
     except Exception as e:
         return f"❌ Gemini Core Error: {str(e)}"
 

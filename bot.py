@@ -15,7 +15,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "Multi-Game Checker Bot is Online!"
+    return "Multi-Game Premium Checker Bot is Online!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8000))
@@ -30,7 +30,9 @@ RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# 🌍 Country Code Mapping
+BRANDING = "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
+
+# 🌍 Universal Country/Region Code Mapping
 COUNTRY_MAP = {
     "mm": "🇲🇲 Myanmar", "myanmar": "🇲🇲 Myanmar", "burma": "🇲🇲 Myanmar",
     "id": "🇮🇩 Indonesia", "indonesia": "🇮🇩 Indonesia",
@@ -40,56 +42,51 @@ COUNTRY_MAP = {
     "th": "🇹🇭 Thailand", "thailand": "🇹🇭 Thailand",
     "kh": "🇰🇭 Cambodia", "cambodia": "🇰🇭 Cambodia",
     "vn": "🇻🇳 Vietnam", "vietnam": "🇻🇳 Vietnam",
-    "la": "🇱🇦 Laos", "laos": "🇱🇦 Laos"
+    "la": "🇱🇦 Laos", "laos": "🇱🇦 Laos",
+    "br": "🇧🇷 Brazil", "brazil": "🇧🇷 Brazil",
+    "in": "🇮🇳 India", "india": "🇮🇳 India",
+    "us": "🇺🇸 United States", "usa": "🇺🇸 United States"
 }
 
 def get_pretty_country(raw_region):
     if not raw_region:
-        return "🌐 International"
+        return "🌐 International / Global"
     clean_region = str(raw_region).strip().lower()
     return COUNTRY_MAP.get(clean_region, f"🏳️ {raw_region.title()}")
 
 # =====================================================================
-# ⚡ ANIMATION BUTTON TEXT LOOP (စာသားအရှင် ပြေးစေမည့် စနစ်)
+# ⚡ LIVE BLINKING BUTTON ANIMATION (စာလုံးပေါ်လိုက်ပျောက်လိုက် စနစ်)
 # =====================================================================
-# ခလုတ်ထဲက နာမည်လေးကို ဘယ်ညာ ရွေ့လျားပြေးနေစေမည့် frames များ
-ANIMATION_FRAMES = [
-    "✨ [ 𝑷𝒂𝒚𝑿-𝑴𝑴 ] ✨",
-    "🌟 [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] 🌟",
-    "💫 [   𝑷𝒂𝒚𝑿-𝑴𝑴   ] 💫",
-    "✨ [    𝑷𝒂𝒚𝑿-𝑴𝑴    ] ✨",
-    "💫 [   𝑷𝒂𝒚𝑿-𝑴𝑴   ] 💫",
-    "🌟 [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] 🌟"
+# နာမည်လေး လင်းလိုက်၊ ပျောက်လိုက်၊ တဖျတ်ဖျတ်ဖြစ်နေစေမည့် Loop Frames
+BLINK_FRAMES = [
+    "⚡ [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] ⚡",
+    "⚫ [             ] ⚫",
+    "✨ [ 🌟 𝑷𝒂𝒚𝑿-𝑴𝑴 🌟 ] ✨",
+    "⚫ [             ] ⚫"
 ]
 
 def animate_start_menu(chat_id, message_id):
-    """အနောက်ကွယ်ကနေ ခလုတ်စာသားကို အဆက်မပြတ် Loop ပတ်ပြီး ပြောင်းလဲပေးမည့် Thread"""
+    """Background Thread အနေဖြင့် စာသားကို အမြဲတမ်း ပေါ်လိုက်ပျောက်လိုက် ဖြစ်စေရန်"""
     frame_index = 0
     while True:
         try:
-            time.sleep(2.5) # ၂.၅ စက္ကန့်တည်းတစ်ခါ စာသားပြေးမည်
+            time.sleep(2.0) # ၂ စက္ကန့်တစ်ခါ လင်းလိုက်မှိတ်လိုက်ဖြစ်မည်
             
-            # လက်ရှိ frame အား ယူခြင်း
-            current_brand = ANIMATION_FRAMES[frame_index]
+            current_text = BLINK_FRAMES[frame_index]
             
-            # Markup ကို ခလုတ်အသစ်စာသားနဲ့ ပြန်ပြင်ဆင်ခြင်း
             markup = InlineKeyboardMarkup()
-            btn_ml = InlineKeyboardButton("Mobile Legends 🎮", callback_data="info_ml")
-            btn_ff = InlineKeyboardButton("Garena Free Fire 🔥", callback_data="info_ff")
-            btn_brand = InlineKeyboardButton(current_brand, callback_data="brand_click")
+            btn_ml = InlineKeyboardButton("🎮 Mobile Legends", callback_data="info_ml")
+            btn_ff = InlineKeyboardButton("🔥 Garena Free Fire", callback_data="info_ff")
+            btn_brand = InlineKeyboardButton(current_text, callback_data="brand_click")
             
             markup.row(btn_ml, btn_ff)
-            markup.row(btn_brand) # အောက်ခြေမှာ နာမည်ပြေးနေမည့် ခလုတ်
+            markup.row(btn_brand)
             
-            # Telegram ထံ စာသားအသစ်အား Edit လုပ်ရန် လှမ်းပို့ခြင်း
             bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=markup)
+            frame_index = (frame_index + 1) % len(BLINK_FRAMES)
             
-            # Frame ပတ်လမ်းအား တိုးမြှင့်ခြင်း
-            frame_index = (frame_index + 1) % len(ANIMATION_FRAMES)
-            
-        except Exception as e:
-            # အသုံးပြုသူက Menu ကို ဖျက်လိုက်လျှင် သို့မဟုတ် Error တက်လျှင် Loop အား ရပ်တန့်ရန်
-            break
+        except Exception:
+            break # User က Message ဖျက်လိုက်ရင် Loop ရပ်မည်
 
 # =====================================================================
 # API Functions
@@ -116,41 +113,42 @@ def check_ff_id(player_id):
 # Bot Handlers & UI
 # =====================================================================
 
-# ၁။ /start command (ခလုတ်အရှင်များ စတင်မည့်နေရာ)
+# ၁။ /start Command (Blinking Button စတင်ခြင်း)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     guide = (
-        "⚔️ **Welcome to Premium Game Checker Bot** ⚔️\n\n"
-        "Select the game you want to check from the buttons below:\n\n"
-        "⚡ _Powered by High-Speed API Automation_"
+        "⚔️ **PREMIUM AUTOMATION ID CHECKER** ⚔️\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Welcome! Select your target game to get account database details:\n\n"
+        "⚙️ _Status: High-Speed Response Core Active_"
     )
     
     markup = InlineKeyboardMarkup()
-    btn_ml = InlineKeyboardButton("Mobile Legends 🎮", callback_data="info_ml")
-    btn_ff = InlineKeyboardButton("Garena Free Fire 🔥", callback_data="info_ff")
-    btn_brand = InlineKeyboardButton("✨ [ 𝑷𝒂𝒚𝑿-𝑴𝑴 ] ✨", callback_data="brand_click")
+    btn_ml = InlineKeyboardButton("🎮 Mobile Legends", callback_data="info_ml")
+    btn_ff = InlineKeyboardButton("🔥 Garena Free Fire", callback_data="info_ff")
+    btn_brand = InlineKeyboardButton("⚡ [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] ⚡", callback_data="brand_click")
     
     markup.row(btn_ml, btn_ff)
     markup.row(btn_brand)
     
     sent_msg = bot.send_message(message.chat.id, guide, parse_mode="Markdown", reply_markup=markup)
     
-    # 🧵 စာသားအရှင်ပြေးစေရန် သီးသန့် Background Thread တစ်ခု ချက်ချင်းမောင်းနှင်ခြင်း
+    # Blinking Thread အား နှိုးခြင်း
     threading.Thread(
         target=animate_start_menu, 
         args=(message.chat.id, sent_msg.message_id), 
         daemon=True
     ).start()
 
-# Button Callback Handler
+# Button Callback
 @bot.callback_query_handler(func=lambda call: True)
 def callback_game_info(call):
     bot.answer_callback_query(call.id)
     
     if call.data == "info_ml":
         text = (
-            "🎮 **MOBILE LEGENDS CHECKER**\n\n"
-            "Please send your ID exactly in this bracket format:\n"
+            "🎮 **MOBILE LEGENDS QUERY MODE**\n\n"
+            "Send ID in bracket format:\n"
             "`/ml [User_ID] ([Zone_ID])`\n\n"
             "💡 **Example:**\n"
             "`/ml 2112723799 (19915)`"
@@ -159,8 +157,8 @@ def callback_game_info(call):
         
     elif call.data == "info_ff":
         text = (
-            "🔥 **FREE FIRE CHECKER**\n\n"
-            "Please send the ID in this format:\n"
+            "🔥 **FREE FIRE QUERY MODE**\n\n"
+            "Send Player UID directly:\n"
             "`/ff [Player_UID]`\n\n"
             "💡 **Example:**\n"
             "`/ff 182200303107200135203`"
@@ -168,9 +166,9 @@ def callback_game_info(call):
         bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
         
     elif call.data == "brand_click":
-        bot.send_message(call.message.chat.id, "🚀 **PayX-MM ID Checker Automation System is Fully Active!**")
+        bot.send_message(call.message.chat.id, f"🚀 **{BRANDING} Gaming Platform Verification Tool v2.0**")
 
-# ၂။ /ml Command Handler
+# ၂။ /ml Command Handler (Premium UI)
 @bot.message_handler(commands=['ml'])
 def handle_ml_check(message):
     match = re.search(r'/ml\s+(\d+)\s*\((.*?)\)', message.text)
@@ -178,9 +176,7 @@ def handle_ml_check(message):
     if not match:
         bot.reply_to(
             message,
-            "⚠️ **Invalid MLBB Format!**\n\n"
-            "You must use bracket style:\n"
-            "`/ml 2112723799 (19915)`",
+            "⚠️ **Invalid MLBB Format!**\nUse: `/ml 2112723799 (19915)`",
             parse_mode="Markdown"
         )
         return
@@ -188,11 +184,11 @@ def handle_ml_check(message):
     user_id = match.group(1)
     zone_id = match.group(2).strip()
     
-    status_msg = bot.reply_to(message, "⏳ *Extracting keys and connecting to Moonton...*", parse_mode="Markdown")
+    status_msg = bot.reply_to(message, "🛸 *Extracting keys and connecting to Moonton Core...*", parse_mode="Markdown")
     result, error = check_mlbb_id(user_id, zone_id)
     
     if error:
-        bot.edit_message_text(f"❌ **Error:** `{error}`\n\n🛠️ Developer: `𝑷𝒂𝒚𝑿-𝑴𝑴`", message.chat.id, status_msg.message_id, parse_mode="Markdown")
+        bot.edit_message_text(f"❌ **Error:** `{error}`\n\n🛠️ Developer: {BRANDING}", message.chat.id, status_msg.message_id, parse_mode="Markdown")
         return
         
     if result:
@@ -203,56 +199,68 @@ def handle_ml_check(message):
             for key in ["data", "result", "player"]:
                 if key in result and isinstance(result[key], dict):
                     inner = result[key]
-                    nickname = inner.get("nickname") or inner.get("name") or inner.get("username") or inner.get("userName") or inner.get("player_name")
+                    nickname = inner.get("nickname") or inner.get("name") or inner.get("username") or inner.get("player_name")
                     raw_region = raw_region or inner.get("region") or inner.get("country") or inner.get("zone_name")
                     break
 
-        if not nickname:
-            nickname = "In-game Hidden / VIP"
-            
+        if not nickname: nickname = "In-Game Hidden / VIP"
         pretty_region = get_pretty_country(raw_region)
             
         cool_ui = (
-            "🎮 **MOBILE LEGENDS PROFILE** 🎮\n"
+            "👑 **MOBILE LEGENDS ACCOUNT PROFILE** 👑\n"
+            "🧬 𝘚𝘺𝘴𝘵𝘦𝘮: 𝘔𝘰𝘰𝘯𝘵𝘰𝘯 𝘋𝘢𝘵𝘢𝘣𝘢𝘴𝘦 𝘓𝘪𝘯𝘬\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👤 **Player Name :** `{nickname}`\n"
-            f"🌐 **Region/Zone  :** `{pretty_region}`\n\n"
+            f"👤 **𝘗𝘭𝘢𝘺𝘦𝘳 𝘕𝘢𝘮𝘦 :** `{nickname}`\n"
+            f"🌐 **𝘙𝘦𝘨𝘪𝘰𝘯 / 𝘡𝘰𝘯𝘦 :** `{pretty_region}`\n"
+            f"🆔 **𝘜𝘴𝘦𝘳 𝘐𝘋      :** `{user_id}`\n"
+            f"📁 **𝘡𝘰𝘯𝘦 𝘐𝘋      :** `{zone_id}`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🆔 **User ID :** `{user_id}`\n"
-            f"📁 **Zone ID :** `{zone_id}`\n\n"
-            f"💫 *Verified via 𝑷𝒂𝒚𝑿-𝑴𝑴 Automation*"
+            f"🛸 **𝘝𝘦𝘳𝘪𝘧𝘪𝘦𝘥 𝘚𝘦𝘳𝘷𝘪𝘤𝘦 𝘉𝘺 :** {BRANDING}"
         )
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
 
-# ၃။ /ff Command Handler
+# ၃။ /ff Command Handler (Premium UI + Region Checker Added)
 @bot.message_handler(commands=['ff'])
 def handle_ff_check(message):
     args = message.text.split()
     if len(args) < 2:
-        bot.reply_to(message, "⚠️ **Invalid FF Format!**\n\nUse: `/ff [Player_UID]`", parse_mode="Markdown")
+        bot.reply_to(message, "⚠️ **Invalid FF Format!**\nUse: `/ff [Player_UID]`", parse_mode="Markdown")
         return
         
     player_id = args[1]
-    status_msg = bot.reply_to(message, "⏳ *Scanning Garena Free Fire Data...*", parse_mode="Markdown")
+    status_msg = bot.reply_to(message, "🛸 *Infiltrating Garena Free Fire Servers...*", parse_mode="Markdown")
     result, error = check_ff_id(player_id)
     
     if error:
-        bot.edit_message_text(f"❌ **Error:** `{error}`\n\n🛠️ Developer: `𝑷𝒂𝒚𝑿-𝑴𝑴`", message.chat.id, status_msg.message_id, parse_mode="Markdown")
+        bot.edit_message_text(f"❌ **Error:** `{error}`\n\n🛠️ Developer: {BRANDING}", message.chat.id, status_msg.message_id, parse_mode="Markdown")
         return
         
     if result:
-        nickname = result.get("nickname") or result.get("username") or result.get("name") or result.get("player_name") or "Unknown Player"
+        # Free Fire Name & Region Parser
+        nickname = result.get("nickname") or result.get("username") or result.get("name") or result.get("player_name")
+        raw_region = result.get("region") or result.get("country") or result.get("country_code") or result.get("region_code")
         
-        if nickname == "Unknown Player" and "data" in result and isinstance(result["data"], dict):
-            nickname = result["data"].get("nickname") or result["data"].get("username") or result["data"].get("name") or "Unknown Player"
+        # Nested Node စစ်ဆေးခြင်း (FF API Keys စုံအောင် လိုက်ရှာပေးခြင်း)
+        if not nickname or not raw_region:
+            for key in ["data", "result", "player"]:
+                if key in result and isinstance(result[key], dict):
+                    inner = result[key]
+                    nickname = nickname or inner.get("nickname") or inner.get("username") or inner.get("name")
+                    raw_region = raw_region or inner.get("region") or inner.get("country") or inner.get("country_code")
+                    break
+                    
+        if not nickname: nickname = "Unknown Garena Player"
+        pretty_region = get_pretty_country(raw_region)
             
         cool_ui = (
             "🔥 **GARENA FREE FIRE PROFILE** 🔥\n"
+            "🧬 𝘚𝘺𝘴𝘵𝘦𝘮: 𝘎𝘢𝘳𝘦𝘯𝘢 𝘓𝘪𝘷𝘦 𝘊𝘰𝘳𝘦\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👤 **Player Name :** `{nickname}`\n"
-            f"🆔 **Player UID   :** `{player_id}`\n\n"
+            f"👤 **𝘗授权𝘢𝘺𝘦𝘳 𝘕𝘢𝘮𝘦 :** `{nickname}`\n"
+            f"🌐 **𝘙𝘦𝘨𝘪𝘰𝘯 / 𝘊𝘰𝘶𝘯𝘵𝘳𝘺:** `{pretty_region}`\n"
+            f"🆔 **𝘗𝘭𝘢𝘺𝘦𝘳 𝘜𝘐𝘋   :** `{player_id}`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💫 *Verified via 𝑷𝒂𝒚𝑿-𝑴𝑴 Automation*"
+            f"🛸 **𝘘𝘶𝘦𝘳𝘺 𝘝𝘦𝘳𝘪𝘧𝘪𝘦𝘥 𝘉𝘺 :** {BRANDING}"
         )
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
 
@@ -261,5 +269,5 @@ def handle_ff_check(message):
 # =====================================================================
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    print("Multi-Game Telebot Server is Live with Text Animation...")
+    print("Multi-Game Premium Checker Bot is Live with Blinking effect & FF Region...")
     bot.infinity_polling()

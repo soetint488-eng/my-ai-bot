@@ -1,5 +1,3 @@
-opencv-python-headless
-numpy
 pyTelegramBotAPI
 requests
 Flask

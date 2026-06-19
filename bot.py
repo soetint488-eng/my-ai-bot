@@ -7,16 +7,17 @@ import threading
 import requests
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from flask import Flask
+from flask import Flask, jsonify
 
 # =====================================================================
-# RENDER PORT BINDING (FLASK WEB SERVER)
+# FLASK WEB SERVER (CRON-JOB READY `200 OK` ENGINE)
 # =====================================================================
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "PayX-MM Premium Core Server is Online"
+    # Cron-job.org က လာခေါက်တဲ့အခါ HTTP Status 200 OK တန်းပြန်ပေးမည့် စနစ်ဖြစ်ပါတယ်
+    return "200 OK - PayX-MM Core Server Online", 200
 
 def run_flask():
     port = int(os.environ.get("PORT", 8000))
@@ -30,13 +31,11 @@ RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
 
 OWNER_ID = 8584422107
-ADMINS = {OWNER_ID}  # Owner is admin by default
+ADMINS = {OWNER_ID}
 
 bot = telebot.TeleBot(BOT_TOKEN)
 BRANDING = "PAYX-MM"
 HASH_FILE = "processed_slips.txt"
-
-# In-memory storage for Muted Users
 MUTED_USERS = set()
 
 def load_hashes():
@@ -158,7 +157,7 @@ def action_mute_user(message):
     if message.from_user.id not in ADMINS: return
     if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to target user to mute.")
     target_id = message.reply_to_message.from_user.id
-    if target_id in ADMINS: return bot.reply_to(message, "Action Denied: Target is an administrator.")
+    if target_id in ADMINS: return bot.reply_to(message, "Action Denied: Target is admin.")
     MUTED_USERS.add(target_id)
     bot.reply_to(message, f"Success: User {target_id} has been muted.")
 
@@ -175,10 +174,10 @@ def action_ban_user(message):
     if message.from_user.id not in ADMINS: return
     if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to target user to ban.")
     target_id = message.reply_to_message.from_user.id
-    if target_id in ADMINS: return bot.reply_to(message, "Action Denied: Target is an administrator.")
+    if target_id in ADMINS: return bot.reply_to(message, "Action Denied: Target is admin.")
     try:
         bot.ban_chat_member(message.chat.id, target_id)
-        bot.reply_to(message, f"Success: User {target_id} has been banned from this group.")
+        bot.reply_to(message, f"Success: User {target_id} has been banned.")
     except Exception as e:
         bot.reply_to(message, f"Execution Error: {str(e)}")
 
@@ -198,18 +197,18 @@ def action_kick_user(message):
     if message.from_user.id not in ADMINS: return
     if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to target user to kick.")
     target_id = message.reply_to_message.from_user.id
-    if target_id in ADMINS: return bot.reply_to(message, "Action Denied: Target is an administrator.")
+    if target_id in ADMINS: return bot.reply_to(message, "Action Denied: Target is admin.")
     try:
         bot.ban_chat_member(message.chat.id, target_id)
-        bot.unban_chat_member(message.chat.id, target_id)  # Unban instantly so they can re-join later
-        bot.reply_to(message, f"Success: User {target_id} has been kicked from the group.")
+        bot.unban_chat_member(message.chat.id, target_id)
+        bot.reply_to(message, f"Success: User {target_id} has been kicked.")
     except Exception as e:
         bot.reply_to(message, f"Execution Error: {str(e)}")
 
 @bot.message_handler(commands=['purge', 'del'])
 def delete_targeted_message(message):
     if message.from_user.id not in ADMINS: return
-    if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to the target text to delete it.")
+    if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to text to delete.")
     try:
         bot.delete_message(message.chat.id, message.reply_to_message.message_id)
         bot.delete_message(message.chat.id, message.message_id)
@@ -219,8 +218,7 @@ def delete_targeted_message(message):
 def action_broadcast_transmission(message):
     if message.from_user.id != OWNER_ID: return
     content = message.text.replace("/broadcast", "").strip()
-    if not content: return bot.reply_to(message, "Usage: /broadcast [Message_Content]")
-    # Broadcast to current channel/chat context as primary terminal feed
+    if not content: return bot.reply_to(message, "Usage: /broadcast [Content]")
     bot.send_message(message.chat.id, f"--- GLOBAL BROADCAST ---\n\n{content}")
 
 # =====================================================================
@@ -230,16 +228,13 @@ def action_broadcast_transmission(message):
 def processing_calculator_expression(message):
     expression = message.text.replace("/calc", "").strip()
     if not expression: return bot.reply_to(message, "Usage: /calc 500 * 2")
-    
-    # Mathematical sanity sanitization filter
     expression = re.sub(r'[^0-9+\-*/().\s]', '', expression)
-    if not expression.strip(): return bot.reply_to(message, "Error: Structural violation detected.")
-    
+    if not expression.strip(): return bot.reply_to(message, "Error: Structural violation.")
     try:
         computation = eval(expression)
         bot.reply_to(message, f"--- CALCULATION MATRIX ---\n\nExpression: {expression}\nResult: `{computation}`", parse_mode="Markdown")
     except Exception:
-        bot.reply_to(message, "Error: Failed to process calculation request.")
+        bot.reply_to(message, "Error: Failed to process calculation.")
 
 # =====================================================================
 # GROUP SCRUBBER & SPAM FILTER (CLEAN UNWANTED CHAT TRAFFIC)
@@ -252,11 +247,9 @@ UNWANTED_PATTERNS = [
 def group_spam_moderator(message):
     if message.from_user.id in ADMINS: return
     if not message.text: return
-    
     for regex_item in UNWANTED_PATTERNS:
         if re.search(regex_item, message.text, re.IGNORECASE):
-            try:
-                bot.delete_message(message.chat.id, message.message_id)
+            try: bot.delete_message(message.chat.id, message.message_id)
             except Exception: pass
             break
 
@@ -269,7 +262,6 @@ def call_game_api(game_type, target_id):
         "Content-Type": "application/json",
         "x-rapidapi-host": RAPIDAPI_HOST
     }
-    
     if game_type == "mlbb":
         url = f"https://{RAPIDAPI_HOST}/mobile-legends/{target_id}"
     elif game_type == "ff":
@@ -278,7 +270,6 @@ def call_game_api(game_type, target_id):
         url = f"https://{RAPIDAPI_HOST}/pubgm-global/{target_id}"
     elif game_type == "coc":
         url = f"https://{RAPIDAPI_HOST}/coc/{target_id}"
-        
     try:
         r = requests.get(url, headers=headers, timeout=12)
         if r.status_code != 200: return None, f"Status {r.status_code}"
@@ -370,7 +361,6 @@ def handle_reply_copy(message):
 
     combined_text = " ".join(found_elements)
     
-    # Monospace backtick structure allows users to tap to copy securely natively
     cool_ui = (
         f"**{BRANDING}**\n\n"
         f"Data Pack: `{combined_text}`\n\n"
@@ -417,7 +407,6 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         )
         
         copy_markup = InlineKeyboardMarkup()
-        # Admin Action Button allocation area
         btn_owner = InlineKeyboardButton(text="⚡ Admin Panel ⚡", url="https://t.me/Dominic")
         btn_delete = InlineKeyboardButton(text="Delete", callback_data="delete_msg")
         
@@ -437,4 +426,30 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
 # =====================================================================
 @bot.message_handler(commands=['ml'])
 def handle_ml(message):
-    match = re.search(r'/ml\s+(\d+)\s*\((.*?)\)', message.t
+    match = re.search(r'/ml\s+(\d+)\s*\((.*?)\)', message.text)
+    if not match: return bot.reply_to(message, "Format Warning: Use /ml 2112723799 (19915)")
+    parse_and_send_result(message, "mlbb", match.group(1), match.group(2).strip())
+
+@bot.message_handler(commands=['ff'])
+def handle_ff(message):
+    args = message.text.split()
+    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /ff [UID]")
+    parse_and_send_result(message, "ff, args[1])
+
+@bot.message_handler(commands=['pubg'])
+def handle_pubg(message):
+    args = message.text.split()
+    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /pubg [ID]")
+    parse_and_send_result(message, "pubg", args[1])
+
+@bot.message_handler(commands=['coc'])
+def handle_coc(message):
+    args = message.text.split()
+    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /coc [Tag]")
+    player_tag = args[1].replace("#", "").strip()
+    parse_and_send_result(message, "coc", player_tag)
+
+if __name__ == "__main__":
+    # Flask Server နှင့် Telegram Bot ကို ခွဲပြီး တစ်ပြိုင်နက် Run ပေးမည့် Main Engine
+    threading.Thread(target=run_flask, daemon=True).start()
+    bot.infinity_polling()

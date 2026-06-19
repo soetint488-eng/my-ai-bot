@@ -27,6 +27,7 @@ def run_flask():
 # =====================================================================
 BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
+RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 BRANDING = "PAYX-MM"
@@ -46,7 +47,7 @@ def save_hash(img_hash):
 PROCESSED_SLIPS = load_hashes()
 
 # =====================================================================
-# DYNAMIC TYPEWRITER HEADER LOOP ENGINE (NO TRANSLATION BUG)
+# DYNAMIC TYPEWRITER HEADER LOOP ENGINE
 # =====================================================================
 HEADER_FRAMES = [
     "P", "PA", "PAY", "PAYX", "PAYX-", "PAYX-M", "PAYX-MM",
@@ -73,7 +74,7 @@ def persistent_header_loop(chat_id, message_id, base_text, markup):
             break
 
 # =====================================================================
-# START COMMAND WITH STYLISH ANIMATION
+# START COMMAND
 # =====================================================================
 def run_start_sequence(chat_id, message_id):
     try:
@@ -108,23 +109,23 @@ def send_welcome(message):
     threading.Thread(target=run_start_sequence, args=(message.chat.id, sent_msg.message_id), daemon=True).start()
 
 # =====================================================================
-# RAPIDAPI TERMINAL ROUTER (GLOBAL ENDPOINTS)
+# RAPIDAPI TERMINAL ROUTER
 # =====================================================================
 def call_game_api(game_type, target_id):
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY, 
         "Content-Type": "application/json",
-        "x-rapidapi-host": "id-game-checker.p.rapidapi.com"
+        "x-rapidapi-host": RAPIDAPI_HOST
     }
     
     if game_type == "mlbb":
-        url = f"https://id-game-checker.p.rapidapi.com/mobile-legends/{target_id}"
+        url = f"https://{RAPIDAPI_HOST}/mobile-legends/{target_id}"
     elif game_type == "ff":
-        url = f"https://id-game-checker.p.rapidapi.com/ff-global/{target_id}"
+        url = f"https://{RAPIDAPI_HOST}/ff-global/{target_id}"
     elif game_type == "pubg":
-        url = f"https://id-game-checker.p.rapidapi.com/pubgm-global/{target_id}"
+        url = f"https://{RAPIDAPI_HOST}/pubgm-global/{target_id}"
     elif game_type == "coc":
-        url = f"https://id-game-checker.p.rapidapi.com/coc/{target_id}"
+        url = f"https://{RAPIDAPI_HOST}/coc/{target_id}"
         
     try:
         r = requests.get(url, headers=headers, timeout=12)
@@ -135,13 +136,14 @@ def call_game_api(game_type, target_id):
         return None, str(e)
 
 # =====================================================================
-# CALLBACK QUERY SYSTEM & TRUE CLIPBOARD ALERTS
+# CALLBACK QUERY SYSTEM & TRUE FAST CLIPBOARD
 # =====================================================================
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
     if call.data.startswith("copy_"):
         copied_text = call.data.replace("copy_", "")
-        bot.answer_callback_query(call.id, text=f"Text Copied: {copied_text}", show_alert=True)
+        # show_alert=False ပြောင်းလိုက်ခြင်းဖြင့် OK နှိပ်စရာမလိုဘဲ တန်းကူးပေးသွားပါမည်
+        bot.answer_callback_query(call.id, text=f"Copied: {copied_text}", show_alert=False)
         return
 
     bot.answer_callback_query(call.id)
@@ -194,7 +196,7 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"System Error: {str(e)}")
 
 # =====================================================================
-# /COPY REPLY HANDLER WITH CYBER TEXT STYLE
+# /COPY REPLY HANDLER (FAST RE-PASTE PATTERN)
 # =====================================================================
 @bot.message_handler(commands=['copy'])
 def handle_reply_copy(message):
@@ -216,7 +218,8 @@ def handle_reply_copy(message):
             if item and item not in found_elements and len(item) >= 2:
                 found_elements.append(item)
                 
-                btn = InlineKeyboardButton(text=f"Copy: {item}", callback_data=f"copy_{item}")
+                # Switch inline query current chat ကိုသုံးပြီး နှိပ်လိုက်တာနဲ့ စာရိုက်ကွက်ထဲ Past တန်းဝင်စေရမည်
+                btn = InlineKeyboardButton(text=f"Copy: {item}", switch_inline_query_current_chat=item)
                 copy_markup.row(btn)
                 monospace_text_block += f"- `{item}`\n"
                 
@@ -228,10 +231,9 @@ def handle_reply_copy(message):
     threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent_msg.message_id, base_copy_ui, copy_markup), daemon=True).start()
 
 # =====================================================================
-# LOOKUP PARSER WITH REGION VERIFIER & PREMIUM CYBER LAYOUT
+# LOOKUP PARSER WITH FAST RE-PASTE PATTERN BUTTONS
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
-    display_id = f"{target_id} ({extra_id})" if extra_id else target_id
     api_query_id = f"{target_id}/{extra_id}" if extra_id else target_id
     
     status_msg = bot.reply_to(message, "Scanning mainframe matrix...")
@@ -251,9 +253,18 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
                     break
         nickname = nickname or "Verified Player"
         
-        region_info = "Unknown"
+        country_info = "Not Found"
         if game_type == "mlbb":
-            region_info = result.get("region") or result.get("zone") or f"Server {extra_id}"
+            country_info = result.get("country") or result.get("region") or result.get("zone")
+            if not country_info:
+                for key in ["data", "result"]:
+                    if key in result and isinstance(result[key], dict):
+                        inner = result[key]
+                        country_info = inner.get("country") or inner.get("region") or inner.get("zone")
+                        break
+            
+            if not country_info or country_info == extra_id:
+                country_info = f"Global Server ({extra_id})"
             
         cool_ui = (
             "-----------------------------\n"
@@ -264,16 +275,17 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         )
         
         if game_type == "mlbb":
-            cool_ui += f" Reg/Server: `{region_info}`\n"
+            cool_ui += f" Country   : `{country_info}`\n"
             
         cool_ui += (
             "-----------------------------\n\n"
-            "Tap buttons below to save data:"
+            "Tap buttons below to copy & paste instantly:"
         )
         
+        # Switch Inline Query စနစ်သစ်ဖြင့် OK နှိပ်စရာမလိုဘဲ တန်းပြီး Past ချခိုင်းခြင်း
         copy_markup = InlineKeyboardMarkup()
-        btn_copy_name = InlineKeyboardButton(text=f"Copy Name: {nickname}", callback_data=f"copy_{nickname}")
-        btn_copy_id = InlineKeyboardButton(text=f"Copy ID: {target_id}", callback_data=f"copy_{target_id}")
+        btn_copy_name = InlineKeyboardButton(text=f"Copy Name: {nickname}", switch_inline_query_current_chat=nickname)
+        btn_copy_id = InlineKeyboardButton(text=f"Copy ID: {target_id}", switch_inline_query_current_chat=target_id)
         
         copy_markup.row(btn_copy_name)
         copy_markup.row(btn_copy_id)

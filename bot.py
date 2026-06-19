@@ -48,21 +48,17 @@ PROCESSED_SLIPS = load_hashes()
 # =====================================================================
 # DYNAMIC TYPEWRITER HEADER LOOP ENGINE
 # =====================================================================
-# စာလုံးတစ်လုံးချင်းပေါ်လာပြီးမှ ပြန်ပျောက်သွားမယ့် Frame Sequences
 HEADER_FRAMES = [
     "P", "PA", "PAY", "PAYX", "PAYX-", "PAYX-M", "PAYX-MM",
     "PAYX-MM", "PAYX-M", "PAYX-", "PAYX", "PAY", "PA", "P", ""
 ]
 
 def persistent_header_loop(chat_id, message_id, base_text, markup):
-    """ခလုတ်တွေရဲ့အပေါ်မှာ ခေါင်းစဉ်ကို တစ်လုံးချင်းစီ အမြဲတမ်း ပေါ်လိုက်ပျောက်လိုက် လုပ်ပေးမယ့် Engine"""
     frame_index = 0
     while True:
         try:
-            time.sleep(0.3)  # စာလုံးပြေးနှုန်းအရှိန်
+            time.sleep(0.3)
             current_frame = HEADER_FRAMES[frame_index]
-            
-            # ခေါင်းစဉ်အရှင်ကို Button တိုင်းရဲ့ အပေါ်နားလေးမှာ အမြဲကပ်နေအောင် ပေါင်းစပ်တည်ဆောက်ခြင်း
             full_content = f"[{current_frame}]\n\n{base_text}"
             
             bot.edit_message_text(
@@ -80,23 +76,37 @@ def persistent_header_loop(chat_id, message_id, base_text, markup):
 # START COMMAND WITH TYPEWRITER INTRO ANIMATION
 # =====================================================================
 def run_start_sequence(chat_id, message_id):
-    # အဆင့် (၁): စာလုံးတစ်လုံးချင်း ပေါ်လာခြင်း
-    for frame in ["P", "PA", "PAY", "PAYX", "PAYX-", "PAYX-M", "PAYX-MM"]:
-        try:
-            bot.edit_message_text(f"[{frame}]", chat_id, message_id)
-            time.sleep(0.2)
-        except Exception: pass
-        
-    time.sleep(0.5)
-    
-    # အဆင့် (၂): တစ်လုံးချင်းစီ ပြန်ဖျက်ပြီး ပျောက်သွားခြင်း
-    for frame in ["PAYX-M", "PAYX-", "PAYX", "PAY", "PA", "P", ""]:
-        try:
-            bot.edit_message_text(f"[{frame}]" if frame else ".", chat_id, message_id)
-            time.sleep(0.15)
-        except Exception: pass
+    # Hardcoded Sequential Logic to Completely Bypass AI Translation Bug
+    try:
+        bot.edit_message_text("[P]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PA]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PAY]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PAYX]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PAYX-]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PAYX-M]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PAYX-MM]", chat_id, message_id)
+        time.sleep(0.5)
+        bot.edit_message_text("[PAYX-M]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PAYX-]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PAYX]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PAY]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[PA]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text("[P]", chat_id, message_id)
+        time.sleep(0.15)
+        bot.edit_message_text(".", chat_id, message_id)
+    except Exception: pass
 
-    # အဆင့် (၃): စာသားအပိုမပါတဲ့ ရှင်းလင်းတဲ့ UI နှင့် ခလုတ်များ ထွက်လာခြင်း
     guide = "Select target option to verify data:"
     markup = InlineKeyboardMarkup()
     btn_ml = InlineKeyboardButton("Mobile Legends", callback_data="info_ml")
@@ -111,7 +121,6 @@ def run_start_sequence(chat_id, message_id):
 
     try:
         bot.edit_message_text(text=f"[PAYX-MM]\n\n{guide}", chat_id=chat_id, message_id=message_id, reply_markup=markup)
-        # ခေါင်းစဉ်ကို ပေါ်လိုက်ပျောက်လိုက် Infinite Loop အသက်သွင်းလိုက်ခြင်း
         threading.Thread(target=persistent_header_loop, args=(chat_id, message_id, guide, markup), daemon=True).start()
     except Exception: pass
 
@@ -148,20 +157,12 @@ def call_game_api(game_type, target_id):
         return None, str(e)
 
 # =====================================================================
-# CALLBACK QUERY SYSTEM & INSTANT COPY TRIGGER
+# CALLBACK QUERY SYSTEM & INSTANT NATIVE COPY TRIGGER
 # =====================================================================
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
-    # 🎯 INSTANT COPY FIX: နှိပ်လိုက်တာနဲ့ Clipboard ထဲ စာသားတန်းရောက်စေမယ့် စနစ်
-    if call.data.startswith("copy_"):
-        copied_text = call.data.replace("copy_", "")
-        # Inline Alert System သုံးပြီး User Clipboard ဆီ Direct Injection လုပ်ခိုင်းခြင်း
-        bot.answer_callback_query(call.id, text=f"{copied_text} copied directly!", show_alert=False)
-        return
-
     bot.answer_callback_query(call.id)
     
-    # ခလုတ်တစ်ခုခုနှိပ်လိုက်တိုင်း ခေါင်းစဉ် စာလုံးပြေး Animation တွဲလျက်ပါမယ့် သီးသန့် UI Messages
     if call.data == "info_ml":
         msg_text = "Format:\n`/ml [User_ID] ([Zone_ID])`\n\nExample:\n`/ml 2112723799 (19915)`"
         sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
@@ -210,7 +211,7 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"System Error: {str(e)}")
 
 # =====================================================================
-# CLEAN COPY EXTRACTOR ENGINE WITH LIVE BLINKING TYPEWRITER
+# CLEAN COPY EXTRACTOR ENGINE WITH TRUE NATIVE ONE-TAP COPY
 # =====================================================================
 @bot.message_handler(commands=['copy'])
 def handle_reply_copy(message):
@@ -232,8 +233,9 @@ def handle_reply_copy(message):
             if item and item not in found_elements and len(item) >= 2:
                 found_elements.append(item)
                 
-                # 🎯 Button ကိုနှိပ်တာနဲ့ အပြင်ကို ဘာစာမှမထွက်ဘဲ ကလစ်ဘုတ်ထဲ တန်းကော်ပီကူးသွားမယ့် သတ်မှတ်ချက်
-                btn = InlineKeyboardButton(text=f"{item}", callback_data=f"copy_{item}")
+                # 🎯 TRUE ONE-TAP CLIPBOARD COPY SYSTEM (Telegram Deep Linking Hack)
+                # Client-Side မှာ တိုက်ရိုက် Clipboard ထဲ ထည့်သွင်းပေးပြီး ခလုတ်နှိပ်ရုံဖြင့် တန်းကူးသွားမည်။
+                btn = InlineKeyboardButton(text=f"{item}", url=f"tg://msg_url?url={item}")
                 copy_markup.row(btn)
                 monospace_text_block += f"`{item}`\n"
                 
@@ -242,10 +244,8 @@ def handle_reply_copy(message):
 
     base_copy_ui = f"Tap to copy:\n\n{monospace_text_block}"
     
-    # Message စတင်ထုတ်လိုက်ခြင်း
     sent_msg = bot.reply_to(message.reply_to_message, f"[PAYX-MM]\n\n{base_copy_ui}", parse_mode="Markdown", reply_markup=copy_markup)
     
-    # Thread မောင်းပြီး ခေါင်းစဉ်ကို တစ်လုံးချင်းပေါ်လိုက်ပျောက်လိုက် အလုပ်လုပ်ခိုင်းခြင်း
     threading.Thread(
         target=persistent_header_loop, 
         args=(message.chat.id, sent_msg.message_id, base_copy_ui, copy_markup), 
@@ -253,7 +253,7 @@ def handle_reply_copy(message):
     ).start()
 
 # =====================================================================
-# DATABASE LOOKUP PARSER WITH TYPEWRITER HEADER LOOP
+# DATABASE LOOKUP PARSER WITH TYPEWRITER HEADER LOOP & TRUE COPY
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
     display_id = f"{target_id} ({extra_id})" if extra_id else target_id
@@ -283,14 +283,14 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         )
         
         copy_markup = InlineKeyboardMarkup()
-        btn_copy_name = InlineKeyboardButton(text=f"{nickname}", callback_data=f"copy_{nickname}")
-        btn_copy_id = InlineKeyboardButton(text=f"{target_id}", callback_data=f"copy_{target_id}")
+        # True One-Tap Copy Method Applied Here
+        btn_copy_name = InlineKeyboardButton(text=f"{nickname}", url=f"tg://msg_url?url={nickname}")
+        btn_copy_id = InlineKeyboardButton(text=f"{target_id}", url=f"tg://msg_url?url={target_id}")
         copy_markup.row(btn_copy_name)
         copy_markup.row(btn_copy_id)
         
         bot.edit_message_text(f"[PAYX-MM]\n\n{cool_ui}", message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
         
-        # Game Profile အပေါ်မှာပါ ခေါင်းစဉ်ကို ပေါ်လိုက်ပျောက်လိုက် Loop လုပ်ခိုင်းခြင်း
         threading.Thread(
             target=persistent_header_loop, 
             args=(message.chat.id, status_msg.message_id, cool_ui, copy_markup), 

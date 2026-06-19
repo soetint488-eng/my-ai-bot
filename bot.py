@@ -22,11 +22,11 @@ def run_flask():
     flask_app.run(host="0.0.0.0", port=port)
 
 # =====================================================================
-# Bot & RapidAPI Configuration
+# Bot & RapidAPI Configuration (API အသစ်စက်စက် ချိန်ညှိပြီး)
 # =====================================================================
 BOT_TOKEN = "8702294693:AAGF_mmGKAg7-mWBuAl34jevVtDJ0mZE8HU"
-RAPIDAPI_KEY = "06b1562a59msh39810b847e9d0e2p151fd6jsn3a9d60ae50a9"
-RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
+RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
+RAPIDAPI_HOST = "check-id-game.p.rapidapi.com"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -42,10 +42,7 @@ COUNTRY_MAP = {
     "th": "🇹🇭 Thailand", "thailand": "🇹🇭 Thailand",
     "kh": "🇰🇭 Cambodia", "cambodia": "🇰🇭 Cambodia",
     "vn": "🇻🇳 Vietnam", "vietnam": "🇻🇳 Vietnam",
-    "la": "🇱🇦 Laos", "laos": "🇱🇦 Laos",
-    "br": "🇧🇷 Brazil", "brazil": "🇧🇷 Brazil",
-    "in": "🇮🇳 India", "india": "🇮🇳 India",
-    "us": "🇺🇸 United States", "usa": "🇺🇸 United States"
+    "la": "🇱🇦 Laos", "laos": "🇱🇦 Laos"
 }
 
 def get_pretty_country(raw_region):
@@ -57,7 +54,6 @@ def get_pretty_country(raw_region):
 # =====================================================================
 # ⚡ LIVE BLINKING BUTTON ANIMATION (စာလုံးပေါ်လိုက်ပျောက်လိုက် စနစ်)
 # =====================================================================
-# နာမည်လေး လင်းလိုက်၊ ပျောက်လိုက်၊ တဖျတ်ဖျတ်ဖြစ်နေစေမည့် Loop Frames
 BLINK_FRAMES = [
     "⚡ [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] ⚡",
     "⚫ [             ] ⚫",
@@ -66,45 +62,45 @@ BLINK_FRAMES = [
 ]
 
 def animate_start_menu(chat_id, message_id):
-    """Background Thread အနေဖြင့် စာသားကို အမြဲတမ်း ပေါ်လိုက်ပျောက်လိုက် ဖြစ်စေရန်"""
+    """Background Thread အနေဖြင့် ခလုတ်စာသားကို ပေါ်လိုက်ပျောက်လိုက် အမြဲဖြစ်စေရန်"""
     frame_index = 0
     while True:
         try:
             time.sleep(2.0) # ၂ စက္ကန့်တစ်ခါ လင်းလိုက်မှိတ်လိုက်ဖြစ်မည်
-            
             current_text = BLINK_FRAMES[frame_index]
             
             markup = InlineKeyboardMarkup()
             btn_ml = InlineKeyboardButton("🎮 Mobile Legends", callback_data="info_ml")
-            btn_ff = InlineKeyboardButton("🔥 Garena Free Fire", callback_data="info_ff")
+            btn_ff = InlineKeyboardButton("🔥 Free Fire", callback_data="info_ff")
+            btn_pubg = InlineKeyboardButton("🔫 PUBG Mobile", callback_data="info_pubg")
             btn_brand = InlineKeyboardButton(current_text, callback_data="brand_click")
             
             markup.row(btn_ml, btn_ff)
+            markup.row(btn_pubg)
             markup.row(btn_brand)
             
             bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=markup)
             frame_index = (frame_index + 1) % len(BLINK_FRAMES)
             
         except Exception:
-            break # User က Message ဖျက်လိုက်ရင် Loop ရပ်မည်
+            break
 
 # =====================================================================
-# API Functions
+# API Functions (New API Core Connection)
 # =====================================================================
-def check_mlbb_id(user_id, zone_id):
-    url = f"https://id-game-checker.p.rapidapi.com/mobile-legends/{user_id}/{zone_id}"
-    headers = {"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_HOST}
+def call_game_api(endpoint, target_id):
+    # check-id-game API အသစ်အတွက် တည်ဆောက်ပုံစနစ်
+    url = f"https://{RAPIDAPI_HOST}/api/rapid_api/{endpoint}/{target_id}"
+    
+    # MLBB အတွက် Host အဟောင်းသုံးရန် လိုအပ်ပါက Dynamic ပြောင်းလဲခြင်း
+    if endpoint == "mobile-legends":
+        url = f"https://id-game-checker.p.rapidapi.com/mobile-legends/{target_id}"
+        headers = {"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": "id-game-checker.p.rapidapi.com"}
+    else:
+        headers = {"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_HOST, "Content-Type": "application/json"}
+        
     try:
-        r = requests.get(url, headers=headers, timeout=10)
-        if r.status_code != 200: return None, f"Status {r.status_code}"
-        return r.json(), None
-    except Exception as e: return None, str(e)
-
-def check_ff_id(player_id):
-    url = f"https://id-game-checker.p.rapidapi.com/dfm-garena/{player_id}"
-    headers = {"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_HOST}
-    try:
-        r = requests.get(url, headers=headers, timeout=10)
+        r = requests.get(url, headers=headers, timeout=12)
         if r.status_code != 200: return None, f"Status {r.status_code}"
         return r.json(), None
     except Exception as e: return None, str(e)
@@ -113,32 +109,29 @@ def check_ff_id(player_id):
 # Bot Handlers & UI
 # =====================================================================
 
-# ၁။ /start Command (Blinking Button စတင်ခြင်း)
+# ၁။ /start Command
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     guide = (
         "⚔️ **PREMIUM AUTOMATION ID CHECKER** ⚔️\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "Welcome! Select your target game to get account database details:\n\n"
-        "⚙️ _Status: High-Speed Response Core Active_"
+        "⚙️ _Status: Multi-Core System Active_"
     )
     
     markup = InlineKeyboardMarkup()
     btn_ml = InlineKeyboardButton("🎮 Mobile Legends", callback_data="info_ml")
-    btn_ff = InlineKeyboardButton("🔥 Garena Free Fire", callback_data="info_ff")
+    btn_ff = InlineKeyboardButton("🔥 Free Fire", callback_data="info_ff")
+    btn_pubg = InlineKeyboardButton("🔫 PUBG Mobile", callback_data="info_pubg")
     btn_brand = InlineKeyboardButton("⚡ [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] ⚡", callback_data="brand_click")
     
     markup.row(btn_ml, btn_ff)
+    markup.row(btn_pubg)
     markup.row(btn_brand)
     
     sent_msg = bot.send_message(message.chat.id, guide, parse_mode="Markdown", reply_markup=markup)
     
-    # Blinking Thread အား နှိုးခြင်း
-    threading.Thread(
-        target=animate_start_menu, 
-        args=(message.chat.id, sent_msg.message_id), 
-        daemon=True
-    ).start()
+    threading.Thread(target=animate_start_menu, args=(message.chat.id, sent_msg.message_id), daemon=True).start()
 
 # Button Callback
 @bot.callback_query_handler(func=lambda call: True)
@@ -146,80 +139,60 @@ def callback_game_info(call):
     bot.answer_callback_query(call.id)
     
     if call.data == "info_ml":
-        text = (
-            "🎮 **MOBILE LEGENDS QUERY MODE**\n\n"
-            "Send ID in bracket format:\n"
-            "`/ml [User_ID] ([Zone_ID])`\n\n"
-            "💡 **Example:**\n"
-            "`/ml 2112723799 (19915)`"
-        )
-        bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
-        
+        bot.send_message(call.message.chat.id, "🎮 **MOBILE LEGENDS QUERY**\n\nFormat:\n`/ml [User_ID] ([Zone_ID])`\n\n💡 **Example:**\n`/ml 2112723799 (19915)`", parse_mode="Markdown")
     elif call.data == "info_ff":
-        text = (
-            "🔥 **FREE FIRE QUERY MODE**\n\n"
-            "Send Player UID directly:\n"
-            "`/ff [Player_UID]`\n\n"
-            "💡 **Example:**\n"
-            "`/ff 182200303107200135203`"
-        )
-        bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
-        
+        bot.send_message(call.message.chat.id, "🔥 **FREE FIRE QUERY**\n\nFormat:\n`/ff [Player_UID]`\n\n💡 **Example:**\n`/ff 11944852314`", parse_mode="Markdown")
+    elif call.data == "info_pubg":
+        bot.send_message(call.message.chat.id, "🔫 **PUBG MOBILE QUERY**\n\nFormat:\n`/pubg [Character_ID]`\n\n💡 **Example:**\n`/pubg 5930748140`", parse_mode="Markdown")
     elif call.data == "brand_click":
-        bot.send_message(call.message.chat.id, f"🚀 **{BRANDING} Gaming Platform Verification Tool v2.0**")
+        bot.send_message(call.message.chat.id, f"🚀 **{BRANDING} Multi-Core Identity System v2.5**")
 
-# ၂။ /ml Command Handler (Premium UI)
+# ၂။ /ml Command Handler
 @bot.message_handler(commands=['ml'])
 def handle_ml_check(message):
     match = re.search(r'/ml\s+(\d+)\s*\((.*?)\)', message.text)
-    
     if not match:
-        bot.reply_to(
-            message,
-            "⚠️ **Invalid MLBB Format!**\nUse: `/ml 2112723799 (19915)`",
-            parse_mode="Markdown"
-        )
+        bot.reply_to(message, "⚠️ **Invalid MLBB Format!**\nUse: `/ml 2112723799 (19915)`", parse_mode="Markdown")
         return
         
     user_id = match.group(1)
     zone_id = match.group(2).strip()
     
-    status_msg = bot.reply_to(message, "🛸 *Extracting keys and connecting to Moonton Core...*", parse_mode="Markdown")
-    result, error = check_mlbb_id(user_id, zone_id)
+    status_msg = bot.reply_to(message, "🛸 *Connecting to Moonton Core...*", parse_mode="Markdown")
+    result, error = call_game_api("mobile-legends", f"{user_id}/{zone_id}")
     
     if error:
         bot.edit_message_text(f"❌ **Error:** `{error}`\n\n🛠️ Developer: {BRANDING}", message.chat.id, status_msg.message_id, parse_mode="Markdown")
         return
         
     if result:
-        nickname = result.get("nickname") or result.get("name") or result.get("username") or result.get("userName") or result.get("player_name")
-        raw_region = result.get("region") or result.get("country") or result.get("zone_name") or result.get("zoneName") or result.get("region_code")
+        nickname = result.get("nickname") or result.get("name") or result.get("username")
+        raw_region = result.get("region") or result.get("country") or result.get("zone_name")
         
         if not nickname:
-            for key in ["data", "result", "player"]:
+            for key in ["data", "result"]:
                 if key in result and isinstance(result[key], dict):
-                    inner = result[key]
-                    nickname = inner.get("nickname") or inner.get("name") or inner.get("username") or inner.get("player_name")
-                    raw_region = raw_region or inner.get("region") or inner.get("country") or inner.get("zone_name")
+                    nickname = result[key].get("nickname") or result[key].get("name")
+                    raw_region = raw_region or result[key].get("region") or result[key].get("country")
                     break
-
-        if not nickname: nickname = "In-Game Hidden / VIP"
+                    
+        nickname = nickname or "In-Game Hidden / VIP"
         pretty_region = get_pretty_country(raw_region)
-            
+        
         cool_ui = (
             "👑 **MOBILE LEGENDS ACCOUNT PROFILE** 👑\n"
-            "🧬 𝘚𝘺𝘴𝘵𝘦𝘮: 𝘔𝘰𝘰𝘯𝘵𝘰𝘯 𝘋𝘢𝘵𝘢𝘣𝘢𝘴𝘦 𝘓𝘪𝘯𝘬\n"
+            "🧬 𝘚𝘺𝘴𝘵𝘦𝘮: 𝘔𝘰𝘰𝘯𝘵𝘰𝘯 𝘋𝘢𝘵𝘢𝘣𝘢𝘴ε 𝘓𝘪𝘯𝘬\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👤 **𝘗𝘭𝘢𝘺𝘦𝘳 𝘕𝘢𝘮𝘦 :** `{nickname}`\n"
+            f"👤 **𝘗𝘭𝘢𝘺𝘦𝘳 𝘕𝘢𝘮𝒆 :** `{nickname}`\n"
             f"🌐 **𝘙𝘦𝘨𝘪𝘰𝘯 / 𝘡𝘰𝘯𝘦 :** `{pretty_region}`\n"
             f"🆔 **𝘜𝘴𝘦𝘳 𝘐𝘋      :** `{user_id}`\n"
             f"📁 **𝘡𝘰𝘯𝘦 𝘐𝘋      :** `{zone_id}`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🛸 **𝘝𝘦𝘳𝘪𝘧𝘪𝘦𝘥 𝘚𝘦𝘳𝘷𝘪𝘤𝘦 𝘉𝘺 :** {BRANDING}"
+            f"🛸 **𝘝𝘦𝘳𝘪𝘧𝘪𝘦𝘥 𝘚𝘦𝘳眷𝘷𝘪𝘤𝘦 𝘉𝘺 :** {BRANDING}"
         )
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
 
-# ၃။ /ff Command Handler (Premium UI + Region Checker Added)
+# ၃။ /ff Command Handler (Free Fire New API)
 @bot.message_handler(commands=['ff'])
 def handle_ff_check(message):
     args = message.text.split()
@@ -228,46 +201,85 @@ def handle_ff_check(message):
         return
         
     player_id = args[1]
-    status_msg = bot.reply_to(message, "🛸 *Infiltrating Garena Free Fire Servers...*", parse_mode="Markdown")
-    result, error = check_ff_id(player_id)
+    status_msg = bot.reply_to(message, "🛸 *Infiltrating Garena Free Fire Live Core...*", parse_mode="Markdown")
+    result, error = call_game_api("ff_idgame", player_id)
     
     if error:
         bot.edit_message_text(f"❌ **Error:** `{error}`\n\n🛠️ Developer: {BRANDING}", message.chat.id, status_msg.message_id, parse_mode="Markdown")
         return
         
     if result:
-        # Free Fire Name & Region Parser
-        nickname = result.get("nickname") or result.get("username") or result.get("name") or result.get("player_name")
-        raw_region = result.get("region") or result.get("country") or result.get("country_code") or result.get("region_code")
+        nickname = result.get("nickname") or result.get("username") or result.get("name")
+        raw_region = result.get("region") or result.get("country") or result.get("country_code")
         
-        # Nested Node စစ်ဆေးခြင်း (FF API Keys စုံအောင် လိုက်ရှာပေးခြင်း)
-        if not nickname or not raw_region:
-            for key in ["data", "result", "player"]:
+        if not nickname:
+            for key in ["data", "result"]:
                 if key in result and isinstance(result[key], dict):
-                    inner = result[key]
-                    nickname = nickname or inner.get("nickname") or inner.get("username") or inner.get("name")
-                    raw_region = raw_region or inner.get("region") or inner.get("country") or inner.get("country_code")
+                    nickname = result[key].get("nickname") or result[key].get("username") or result[key].get("name") or result[key].get("userName")
+                    raw_region = raw_region or result[key].get("region") or result[key].get("country")
                     break
                     
-        if not nickname: nickname = "Unknown Garena Player"
+        nickname = nickname or "Unknown Garena Player"
         pretty_region = get_pretty_country(raw_region)
-            
+        
         cool_ui = (
             "🔥 **GARENA FREE FIRE PROFILE** 🔥\n"
-            "🧬 𝘚𝘺𝘴𝘵𝘦𝘮: 𝘎𝘢𝘳𝘦𝘯𝘢 𝘓𝘪𝘷𝘦 𝘊𝘰𝘳𝘦\n"
+            "🧬 𝘚𝘺𝘴𝘵𝘦𝘮: 𝘎𝘢𝘳𝘦𝘯𝘢 𝘋𝘢𝘵𝘢𝘣𝘢𝘴𝘦\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👤 **𝘗授权𝘢𝘺𝘦𝘳 𝘕𝘢𝘮𝘦 :** `{nickname}`\n"
+            f"👤 **𝘗𝘭𝘢𝘺𝘦𝘳 𝘕𝘢𝘮𝒆 :** `{nickname}`\n"
             f"🌐 **𝘙𝘦𝘨𝘪𝘰𝘯 / 𝘊𝘰𝘶𝘯𝘵𝘳𝘺:** `{pretty_region}`\n"
-            f"🆔 **𝘗𝘭𝘢𝘺𝘦𝘳 𝘜𝘐𝘋   :** `{player_id}`\n\n"
+            f"🆔 **𝘗𝘭𝘢𝘺𝘦𝘳 𝘜𝘲𝘐𝘋   :** `{player_id}`\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🛸 **𝘘𝘶𝘦𝘳𝘺 𝘝𝘦𝘳𝘪𝘧𝘪𝘦𝘥 𝘉𝘺 :** {BRANDING}"
+        )
+        bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
+
+# ၄။ /pubg Command Handler (PUBG Mobile New API)
+@bot.message_handler(commands=['pubg'])
+def handle_pubg_check(message):
+    args = message.text.split()
+    if len(args) < 2:
+        bot.reply_to(message, "⚠️ **Invalid PUBG Format!**\nUse: `/pubg [Character_ID]`", parse_mode="Markdown")
+        return
+        
+    player_id = args[1]
+    status_msg = bot.reply_to(message, "🛸 *Infiltrating PUBG Mobile Server Core...*", parse_mode="Markdown")
+    result, error = call_game_api("cekpubgmobile", player_id)
+    
+    if error:
+        bot.edit_message_text(f"❌ **Error:** `{error}`\n\n🛠️ Developer: {BRANDING}", message.chat.id, status_msg.message_id, parse_mode="Markdown")
+        return
+        
+    if result:
+        nickname = result.get("nickname") or result.get("username") or result.get("name")
+        raw_region = result.get("region") or result.get("country")
+        
+        if not nickname:
+            for key in ["data", "result"]:
+                if key in result and isinstance(result[key], dict):
+                    nickname = result[key].get("nickname") or result[key].get("username") or result[key].get("name") or result[key].get("userName")
+                    raw_region = raw_region or result[key].get("region") or result[key].get("country")
+                    break
+                    
+        nickname = nickname or "Unknown PUBG Player"
+        pretty_region = get_pretty_country(raw_region)
+        
+        cool_ui = (
+            "🔫 **PUBG MOBILE GLOBAL PROFILE** 🔫\n"
+            "🧬 𝘚𝘺𝘴𝘵𝘦𝘮: 𝘛𝘦𝘯𝘤𝘦𝘯𝘵 𝘋𝘢𝘵𝘢𝘣𝘢𝘴𝘦\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👤 **𝘗𝘭𝘢𝘺𝘦𝘳 𝘕𝘢𝘮𝒆 :** `{nickname}`\n"
+            f"🌐 **𝘙𝘦𝘨𝘪𝘰𝘯 / 𝘊𝘰𝘶𝘯𝘵𝘳𝘺:** `{pretty_region}`\n"
+            f"🆔 **𝘊𝘩𝘢𝘳𝘢𝘤𝘵𝘦𝘳 𝘐𝘋 :** `{player_id}`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🛸 **𝘘𝘶𝘦𝘳𝘺 𝘝𝘦𝘳𝘪𝘧𝘪𝘦𝘥 𝘉𝘺 :** {BRANDING}"
         )
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
 
 # =====================================================================
-# 4. Main Runner
+# Main Runner
 # =====================================================================
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    print("Multi-Game Premium Checker Bot is Live with Blinking effect & FF Region...")
+    print("Multi-Game Telebot Server v2.5 is running perfectly...")
     bot.infinity_polling()

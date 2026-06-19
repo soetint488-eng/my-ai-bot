@@ -23,7 +23,6 @@ def run_flask():
 # =====================================================================
 # Bot & RapidAPI Configuration
 # =====================================================================
-# ကိုကို ပေးထားတဲ့ Token အသစ်ကို တိုက်ရိုက် ထည့်သွင်းထားပါတယ်ရှင့်
 TOKEN = "8761954371:AAFJjatvSIsLuy6DHvSOlQ3koZ1LbDyNH3A"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -35,7 +34,7 @@ HEADERS = {
     'x-rapidapi-key': '283b178159msh486932881be989fp157c27jsn617224a255da'
 }
 
-# 1. /start Command (English Clean UI)
+# 1. /start Command (English Clean UI with HeinHtet Develop Credit)
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     guide = (
@@ -45,16 +44,16 @@ async def cmd_start(message: types.Message):
         "`/ml [User_ID] [Zone_ID]`\n\n"
         "💡 **Example:**\n"
         "`/ml 114935204 2576`\n\n"
-        "Developed with ⚡ by Dominic."
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ **Powered by:** `HeinHtet Develop`"
     )
     await message.reply(guide, parse_mode="Markdown")
 
-# 2. MLBB Lookup Handler (Cool UI Output)
+# 2. MLBB Lookup Handler (Robust Key Parser Inside)
 @dp.message(Command("ml"))
 async def cmd_ml_check(message: types.Message):
     args = message.text.split()
     
-    # Parameter မပြည့်စုံပါက အသိပေးရန်
     if len(args) < 3:
         await message.reply(
             "⚠️ **Invalid Format!**\n\n"
@@ -69,7 +68,6 @@ async def cmd_ml_check(message: types.Message):
     
     status_msg = await message.reply("⏳ *Fetching data from Moonton servers... Please wait.*", parse_mode="Markdown")
 
-    # အစ်ကိုပေးထားတဲ့ curl အတိုင်း POST Body ပြင်ဆင်ခြင်း
     payload = {
         "user_id": user_id,
         "zone_id": zone_id
@@ -81,12 +79,21 @@ async def cmd_ml_check(message: types.Message):
         if response.status_code == 200:
             result = response.json()
             
-            # API Response တန်ဖိုးများကို ဆွဲထုတ်ခြင်း
-            # Note: API က ပေးတဲ့ Key ပုံစံအလိုက် သင့်တော်သလို ဖတ်နိုင်ရန် ပြင်ဆင်ထားပါတယ်
-            nickname = result.get("nickname") or result.get("username") or result.get("name") or "Unknown"
-            region = result.get("region") or result.get("country") or result.get("zone_name") or "Not Found"
+            # 🛡️ API တုံ့ပြန်မှု ပုံစံမျိုးစုံကို အကုန်လိုက်ဖတ်ပေးမည့်အပိုင်း
+            nickname = result.get("nickname") or result.get("username") or result.get("name") or result.get("userName")
+            region = result.get("region") or result.get("country") or result.get("zone_name") or result.get("zoneName")
             
-            # ✨ UI အလန်းစား ဒီဇိုင်းပုံစံဖြင့် ထုတ်ပြမည့်အပိုင်း (English Version)
+            if not nickname and "data" in result and isinstance(result["data"], dict):
+                inner_data = result["data"]
+                nickname = inner_data.get("nickname") or inner_data.get("username") or inner_data.get("name") or inner_data.get("userName")
+                region = inner_data.get("region") or inner_data.get("country") or inner_data.get("zone_name") or inner_data.get("zoneName")
+
+            if not nickname:
+                nickname = "Not Found / In-game Hidden"
+            if not region:
+                region = "International / Moonton Default"
+
+            # ✨ UI Display with HeinHtet Develop Branding
             cool_ui = (
                 "🎮 **MOBILE LEGENDS PLAYER PROFILE** 🎮\n"
                 "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -95,26 +102,28 @@ async def cmd_ml_check(message: types.Message):
                 "━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🆔 **User ID :** `{user_id}`\n"
                 f"📁 **Zone ID :** `{zone_id}`\n\n"
-                "✨ *Status: Successfully Verified!*"
+                "✨ *Status: Successfully Verified!*\n"
+                "🛠️ *Developer:* `HeinHtet Develop`"
             )
             await status_msg.edit_text(cool_ui, parse_mode="Markdown")
         else:
             await status_msg.edit_text(
                 f"❌ **API Request Failed!**\n\n"
                 f"Status Code: `{response.status_code}`\n"
-                "Please verify the User ID and Zone ID and try again.",
+                "Please verify the User ID and Zone ID and try again.\n\n"
+                "🛠️ `HeinHtet Develop`",
                 parse_mode="Markdown"
             )
             
     except Exception as e:
-        await status_msg.edit_text(f"❌ **Connection Error:** `{str(e)}`", parse_mode="Markdown")
+        await status_msg.edit_text(f"❌ **Connection Error:** `{str(e)}` \n\n🛠️ `HeinHtet Develop`", parse_mode="Markdown")
 
 # =====================================================================
 # 3. Main Function to Run Server & Bot
 # =====================================================================
 async def main():
     threading.Thread(target=run_flask, daemon=True).start()
-    print("MLBB Checker Bot is successfully running with new token...")
+    print("MLBB Checker Bot is successfully running with HeinHtet Develop Credit...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

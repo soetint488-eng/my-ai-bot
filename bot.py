@@ -35,19 +35,16 @@ BRANDING = "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
 HASH_FILE = "processed_slips.txt"
 
 def load_hashes():
-    """ Bot စတက်ချိန်တွင် သိမ်းထားသော ပုံများ၏ Hash များကို ပြန်ဖတ်ခြင်း """
     if not os.path.exists(HASH_FILE):
         return set()
     with open(HASH_FILE, "r") as f:
         return set(line.strip() for line in f if line.strip())
 
 def save_hash(img_hash):
-    """ ပုံအသစ်ဝင်လာတိုင်း Hash ကို ဖိုင်ထဲသို့ အပိုင်သိမ်းခြင်း """
     PROCESSED_SLIPS.add(img_hash)
     with open(HASH_FILE, "a") as f:
         f.write(f"{img_hash}\n")
 
-# Memory ထဲသို့ ဒေတာများ ကြိုတင်တင်ထားခြင်း
 PROCESSED_SLIPS = load_hashes()
 
 # Country/Region Mapping
@@ -73,10 +70,8 @@ def get_pretty_country(raw_region):
 # ⚡ LIVE BLINKING BUTTON ANIMATION
 # =====================================================================
 BLINK_FRAMES = [
-    "⚡ [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] ⚡",
-    "⚫ [             ] ⚫",
-    "✨ [ 🌟 𝑷𝒂𝒚𝑿-𝑴𝑴 🌟 ] ✨",
-    "⚫ [             ] ⚫"
+    "⚡ [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] ⚡", "⚫ [             ] ⚫",
+    "✨ [ 🌟 𝑷𝒂𝒚𝑿-𝑴𝑴 🌟 ] ✨", "⚫ [             ] ⚫"
 ]
 
 def animate_start_menu(chat_id, message_id):
@@ -101,9 +96,7 @@ def animate_start_menu(chat_id, message_id):
             
             bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=markup)
             frame_index = (frame_index + 1) % len(BLINK_FRAMES)
-            
-        except Exception:
-            break
+        except Exception: break
 
 # =====================================================================
 # ⌨️ INTRO TYPEWRITER ANIMATION
@@ -116,7 +109,7 @@ def run_start_intro_animation(chat_id, initial_msg_id):
             time.sleep(0.25)
         except Exception: pass
     time.sleep(0.6)
-    erase_steps = ["⏳ 𝑷𝒂𝒚𝑿-𝑴...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿...", "⏳ 𝑷𝒂𝒚...", "⏳ 𝑷...", "⏳ System Loading..."]
+    erase_steps = ["⏳ 𝑷𝒂𝒚𝑿-𝑴...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿...", "⏳ 𝑷𝒂... ", "⏳ 𝑷...", "⏳ System Loading..."]
     for step in erase_steps:
         try:
             bot.edit_message_text(f"`{step}`", chat_id, initial_msg_id, parse_mode="Markdown")
@@ -128,7 +121,7 @@ def run_start_intro_animation(chat_id, initial_msg_id):
         "⚔️ **PREMIUM AUTOMATION ID & SLIP DUPLICATE CHECKER** ⚔️\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "Welcome! Select your target platform to check ID or upload your receipt:\n\n"
-        "💡 *Tip: You can send a KPay/WavePay slip photo here. The bot will automatically alert if this image has been used or sent before!*"
+        "💡 *Tip: Reply to any text message containing player credentials with `/copy` to generate rapid copy buttons instantly!*"
     )
     markup = InlineKeyboardMarkup()
     btn_ml = InlineKeyboardButton("🎮 Mobile Legends", callback_data="info_ml")
@@ -226,9 +219,60 @@ def handle_slip_verification(message):
                 f"⚙️ Slip Token: `{img_hash[:12]}`"
             )
             bot.reply_to(message, ui_response, parse_mode="Markdown")
-            
     except Exception as e:
         bot.reply_to(message, f"❌ **System Error:** `{str(e)}`", parse_mode="Markdown")
+
+# =====================================================================
+# 📋 SMART REPLY TEXT PARSER FOR /COPY COMMAND
+# =====================================================================
+@bot.message_handler(commands=['copy'])
+def handle_reply_copy(message):
+    # စာသားကို Reply ပြန်ထားခြင်း ရှိမရှိ စစ်ဆေးခြင်း
+    if not message.reply_to_message or not message.reply_to_message.text:
+        return bot.reply_to(message, "⚠️ **အသုံးပြုပုံ:** အချက်အလက်ပါဝင်သော စာသားကို Reply ပြန်ပြီး `/copy` ဟု ပို့ပေးပါ ကိုကို။", parse_mode="Markdown")
+    
+    target_text = message.reply_to_message.text
+    
+    # 🔍 စာသားထဲကနေ စကားလုံးတွေကို လိုင်းအလိုက် ခွဲထုတ်ခြင်း
+    lines = [line.strip() for line in target_text.split('\n') if line.strip()]
+    
+    # RegExp များဖြင့် သီးသန့် အချက်အလက်များကို ရှာဖွေဖတ်ယူခြင်း
+    # ၁။ ဂဏန်းအရှည်ကြီး (လိမ်ညာမှုမရှိသော User ID သို့မဟုတ် Transaction ID)
+    long_numbers = re.findall(r'\b\d{8,22}\b', target_text)
+    # ၂။ စာလုံးတိုလေးများ သို့မဟုတ် Server Key (ဥပမာ - Sea, 48k94fef, 26dp609v စသည်)
+    short_alphanumeric = re.findall(r'\b[a-zA-Z0-9]{4,10}\b', target_text)
+    
+    # ခလုတ်အဖွဲ့အစည်း တည်ဆောက်ရန် ပြင်ဆင်ခြင်း
+    copy_markup = InlineKeyboardMarkup()
+    found_elements = []
+
+    # လိုင်းတစ်ခုချင်းစီအလိုက် တိုက်ရိုက်ခွဲထုတ်ပြီး Button တည်ဆောက်ခြင်း
+    for raw_item in lines:
+        # မလိုအပ်သော ကွန်မန့် သို့မဟုတ် ခေါင်းစဉ်စာသားများကို ဖယ်ထုတ်ရန်
+        if "/copy" in raw_item.lower() or "payx" in raw_item.lower():
+            continue
+            
+        # လိုင်းတစ်ခုထဲမှာ စာသားတွေ အများကြီးပါနေရင် space ချပြီး ထပ်ခွဲထုတ်မယ်
+        sub_items = [s.strip("(),. ") for s in raw_item.split() if s.strip("(),. ")]
+        for item in sub_items:
+            if item and item not in found_elements and len(item) >= 3:
+                found_elements.append(item)
+                btn = InlineKeyboardButton(
+                    text=f"📋 {item}",
+                    switch_inline_query_current_chat=str(item)
+                )
+                copy_markup.row(btn)
+                
+    if not found_elements:
+        return bot.reply_to(message, "❌ **စာသားထဲတွင် ခွဲထုတ်ရန် အချက်အလက် မတွေ့ရှိပါ ကိုကို။**", parse_mode="Markdown")
+
+    # UI ထုတ်ပြန်ပေးခြင်း
+    ui_header = (
+        f"📋 **📋 Tap to copy:**\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"ခလုတ်များကို နှိပ်ပြီး တန်ဖိုးများကို အလွယ်တကူ Copy ကူးယူနိုင်ပါပြီ ကိုကို။"
+    )
+    bot.reply_to(message.reply_to_message, ui_header, reply_markup=copy_markup)
 
 # =====================================================================
 # Game ID Processing Core (With Compact Text & Copy Buttons)
@@ -263,7 +307,6 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         systems = {"mlbb": "Moonton Live Link", "ff": "Garena Core Database", "pubg": "Tencent Live Core", "coc": "Supercell Live Core"}
         id_labels = {"mlbb": "User ID & Zone", "ff": "Player UID", "pubg": "Character ID", "coc": "Player Tag"}
         
-        # 📋 UI အပေါ်ပိုင်းစာသားကိုလည်း ကျစ်လျစ်သပ်ရပ်အောင် ပြောင်းလဲခြင်း
         cool_ui = (
             f"👑 **{titles[game_type]}** 👑\n"
             f"🧬 System: {systems[game_type]}\n"
@@ -275,28 +318,15 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
             f"📋 **Tap to copy:**"
         )
         
-        # 📲 IMG_20260619_191020_964_2.jpg ထဲကလို သေးသေးလေးနဲ့ သပ်ရပ်မယ့် Inline Buttons များ ဖန်တီးခြင်း
         copy_markup = InlineKeyboardMarkup()
-        
-        # 📋 စာသားမပါဘဲ Value သီးသန့်ပြမယ့် သေးသေးလေးလှလှလေး Button ပုံစံ
-        btn_copy_name = InlineKeyboardButton(
-            text=f"📋 {nickname}",
-            switch_inline_query_current_chat=str(nickname)
-        )
-        btn_copy_id = InlineKeyboardButton(
-            text=f"📋 {target_id}",
-            switch_inline_query_current_chat=str(target_id)
-        )
+        btn_copy_name = InlineKeyboardButton(text=f"📋 {nickname}", switch_inline_query_current_chat=str(nickname))
+        btn_copy_id = InlineKeyboardButton(text=f"📋 {target_id}", switch_inline_query_current_chat=str(target_id))
         
         copy_markup.row(btn_copy_name)
         copy_markup.row(btn_copy_id)
         
-        # Zone ID ရှိပါက ၎င်းအတွက်ပါ သီးသန့် Button ထပ်ထည့်ပေးခြင်း
         if extra_id:
-            btn_copy_zone = InlineKeyboardButton(
-                text=f"📋 {extra_id}",
-                switch_inline_query_current_chat=str(extra_id)
-            )
+            btn_copy_zone = InlineKeyboardButton(text=f"📋 {extra_id}", switch_inline_query_current_chat=str(extra_id))
             copy_markup.row(btn_copy_zone)
             
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)

@@ -2,37 +2,37 @@ import os
 import sys
 import re
 import time
+import base64
 import threading
 import requests
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
-import cv2
-import numpy as np
 
 # =====================================================================
-# 🛠️ RENDER PORT BINDING ERROR FIX (FLASK WEB SERVER)
+# 🛠️ RENDER PORT BINDING FIX (FLASK WEB SERVER)
 # =====================================================================
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "Multi-Game & Payment Premium Checker Bot is Online!"
+    return "PayX-MM Multi-Game & Gemini AI Payment Checker is Online!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8000))
     flask_app.run(host="0.0.0.0", port=port)
 
 # =====================================================================
-# Bot Configuration 
+# Configuration (Tokens & API Keys)
 # =====================================================================
 BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
 RAPIDAPI_KEY = "06b1562a59msh39810b847e9d0e2p151fd6jsn3a9d60ae50a9"
+GEMINI_API_KEY = "AQ.Ab8RN6Ipt2azCezZViRxbR14ww7UB6Tk43ZnODYJvwXjze4DEA"
 
 bot = telebot.TeleBot(BOT_TOKEN)
-
 BRANDING = "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
 
+# Country/Region Mapping
 COUNTRY_MAP = {
     "mm": "🇲🇲 Myanmar", "myanmar": "🇲🇲 Myanmar", "burma": "🇲🇲 Myanmar",
     "id": "🇮🇩 Indonesia", "indonesia": "🇮🇩 Indonesia",
@@ -52,7 +52,7 @@ def get_pretty_country(raw_region):
     return COUNTRY_MAP.get(clean_region, f"🏳️ {raw_region.title()}")
 
 # =====================================================================
-# ⚡ LIVE BLINKING BUTTON ANIMATION 
+# ⚡ LIVE BLINKING BUTTON ANIMATION
 # =====================================================================
 BLINK_FRAMES = [
     "⚡ [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] ⚡",
@@ -73,13 +73,12 @@ def animate_start_menu(chat_id, message_id):
             btn_ff = InlineKeyboardButton("🔥 Free Fire", callback_data="info_ff")
             btn_pubg = InlineKeyboardButton("🔫 PUBG Mobile", callback_data="info_pubg")
             btn_coc = InlineKeyboardButton("🏰 Clash of Clans", callback_data="info_coc")
-            btn_kpay = InlineKeyboardButton("💸 KBZPay Slip", callback_data="info_kpay")
-            btn_wave = InlineKeyboardButton("🌊 WavePay Slip", callback_data="info_wave")
+            btn_slip = InlineKeyboardButton("📸 Verify Any Slip (KPay/Wave)", callback_data="info_slip")
             btn_brand = InlineKeyboardButton(current_text, callback_data="brand_click")
             
             markup.row(btn_ml, btn_ff)
             markup.row(btn_pubg, btn_coc)
-            markup.row(btn_kpay, btn_wave)
+            markup.row(btn_slip)
             markup.row(btn_brand)
             
             bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=markup)
@@ -89,71 +88,53 @@ def animate_start_menu(chat_id, message_id):
             break
 
 # =====================================================================
-# ⌨️ INTRO TYPEWRITER & ERASE CORE
+# ⌨️ INTRO TYPEWRITER ANIMATION
 # =====================================================================
 def run_start_intro_animation(chat_id, initial_msg_id):
-    typing_steps = [
-        "⏳ 𝑷...", "⏳ 𝑷𝒂...", "⏳ 𝑷𝒂𝒚...", "⏳ 𝑷𝒂𝒚𝑿...", 
-        "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿-𝑴...", "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
-    ]
+    typing_steps = ["⏳ 𝑷...", "⏳ 𝑷𝒂...", "⏳ 𝑷𝒂𝒚...", "⏳ 𝑷𝒂𝒚𝑿...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿-𝑴...", "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"]
     for step in typing_steps:
         try:
             bot.edit_message_text(f"`{step}`", chat_id, initial_msg_id, parse_mode="Markdown")
             time.sleep(0.25)
-        except Exception:
-            pass
-            
+        except Exception: pass
     time.sleep(0.6)
-    
-    erase_steps = [
-        "⏳ 𝑷𝒂𝒚𝑿-𝑴...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿...", 
-        "⏳ 𝑷𝒂𝒚...", "⏳ 𝑷...", "⏳ System Loading..."
-    ]
+    erase_steps = ["⏳ 𝑷𝒂𝒚𝑿-𝑴...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿...", "⏳ 𝑷𝒂𝒚...", "⏳ 𝑷...", "⏳ System Loading..."]
     for step in erase_steps:
         try:
             bot.edit_message_text(f"`{step}`", chat_id, initial_msg_id, parse_mode="Markdown")
             time.sleep(0.15)
-        except Exception:
-            pass
+        except Exception: pass
 
     time.sleep(0.3)
-
     guide = (
-        "⚔️ **PREMIUM AUTOMATION ID & SLIP CHECKER** ⚔️\n"
+        "⚔️ **PREMIUM AUTOMATION ID & AI SLIP CHECKER** ⚔️\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Welcome! Select your target platform to get account or receipt database details:\n\n"
-        "💡 *Tip: You can directly send a KPay/WavePay receipt photo to verify its authenticity!*"
+        "Welcome! Select your target platform to check ID or upload any receipt:\n\n"
+        "💡 *Tip: You can directly upload ANY KPay or WavePay slip photo. Our Gemini AI will automatically read the data and detect fake edits!*"
     )
-    
     markup = InlineKeyboardMarkup()
     btn_ml = InlineKeyboardButton("🎮 Mobile Legends", callback_data="info_ml")
     btn_ff = InlineKeyboardButton("🔥 Free Fire", callback_data="info_ff")
     btn_pubg = InlineKeyboardButton("🔫 PUBG Mobile", callback_data="info_pubg")
     btn_coc = InlineKeyboardButton("🏰 Clash of Clans", callback_data="info_coc")
-    btn_kpay = InlineKeyboardButton("💸 KBZPay Slip", callback_data="info_kpay")
-    btn_wave = InlineKeyboardButton("🌊 WavePay Slip", callback_data="info_wave")
+    btn_slip = InlineKeyboardButton("📸 Verify Any Slip (KPay/Wave)", callback_data="info_slip")
     btn_brand = InlineKeyboardButton("⚡ [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] ⚡", callback_data="brand_click")
     
     markup.row(btn_ml, btn_ff)
     markup.row(btn_pubg, btn_coc)
-    markup.row(btn_kpay, btn_wave)
+    markup.row(btn_slip)
     markup.row(btn_brand)
     
     try:
         bot.edit_message_text(guide, chat_id, initial_msg_id, parse_mode="Markdown", reply_markup=markup)
         threading.Thread(target=animate_start_menu, args=(chat_id, initial_msg_id), daemon=True).start()
-    except Exception:
-        pass
+    except Exception: pass
 
 # =====================================================================
-# 🎯 API DYNAMIC ROUTER
+# 🎯 GAME ID CHECKER API ROUTER
 # =====================================================================
 def call_game_api(game_type, target_id):
-    headers = {
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "Content-Type": "application/json"
-    }
-    
+    headers = {"x-rapidapi-key": RAPIDAPI_KEY, "Content-Type": "application/json"}
     if game_type == "mlbb":
         url = f"https://id-game-checker.p.rapidapi.com/mobile-legends/{target_id}"
         headers["x-rapidapi-host"] = "id-game-checker.p.rapidapi.com"
@@ -166,7 +147,6 @@ def call_game_api(game_type, target_id):
     elif game_type == "coc":
         url = f"https://id-game-checker.p.rapidapi.com/coc/{target_id}"
         headers["x-rapidapi-host"] = "id-game-checker.p.rapidapi.com"
-        
     try:
         r = requests.get(url, headers=headers, timeout=12)
         if r.status_code != 200: return None, f"Status {r.status_code}"
@@ -174,7 +154,57 @@ def call_game_api(game_type, target_id):
     except Exception as e: return None, str(e)
 
 # =====================================================================
-# Bot Handlers & UI
+# 🧠 GEMINI AI VISION RECEIPT AUDITOR ENGINE
+# =====================================================================
+def call_gemini_vision_api(image_bytes):
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+    base64_image = base64.b64encode(image_bytes).decode('utf-8')
+    
+    prompt = (
+        "You are an expert financial receipt auditor for Myanmar Mobile Wallets (KBZPay and WavePay). "
+        "Analyze this image carefully. Extract and output the following details in beautiful Myanmar language Markdown format: "
+        "1. Wallet Type (KBZPay or WavePay or Unknown) "
+        "2. Transaction ID / Ref No "
+        "3. Amount (with Ks/MMK) "
+        "4. Date & Time "
+        "5. Sender & Receiver Name/Phone "
+        "6. Authenticity Status: Carefully check if fonts, alignment, or background details look Photoshopped, fake, or edited. "
+        "Make it look premium, neat, and clean for a Telegram bot response."
+    )
+    
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inlineData": {
+                            "mimeType": "image/jpeg",
+                            "data": base64_image
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+    
+    headers = {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=25)
+        if response.status_code == 200:
+            res_json = response.json()
+            return res_json['candidates'][0]['content']['parts'][0]['text']
+        else:
+            return f"❌ API Error (Status: {response.status_code})\nGemini API Key မှန်ကန်မှုရှိမရှိ ပြန်စစ်ပေးပါ ကိုကို။"
+    except Exception as e:
+        return f"❌ Gemini Core Error: {str(e)}"
+
+# =====================================================================
+# Telegram Message Handlers
 # =====================================================================
 
 @bot.message_handler(commands=['start'])
@@ -193,76 +223,33 @@ def callback_game_info(call):
         bot.send_message(call.message.chat.id, "🔫 **PUBG MOBILE QUERY**\n\nFormat:\n`/pubg [Character_ID]`\n\n💡 **Example:**\n`/pubg 5930748140`", parse_mode="Markdown")
     elif call.data == "info_coc":
         bot.send_message(call.message.chat.id, "🏰 **CLASH OF CLANS QUERY**\n\nFormat:\n`/coc [Player_Tag]`\n\n💡 **Example:**\n`/coc 20C0RVGL`", parse_mode="Markdown")
-    elif call.data == "info_kpay":
-        bot.send_message(call.message.chat.id, "💸 **KBZPAY SLIP VERIFICATION**\n\nစစ်ဆေးလိုသော KBZPay ပြေစာ (Slip) ဓာတ်ပုံကို Bot ဆီသို့ တိုက်ရိုက် ပို့ပေးပါဗျာ။", parse_mode="Markdown")
-    elif call.data == "info_wave":
-        bot.send_message(call.message.chat.id, "🌊 **WAVEPAY SLIP VERIFICATION**\n\nစစ်ဆေးလိုသော WavePay ပြေစာ (Slip) ဓာတ်ပုံကို Bot ဆီသို့ တိုက်ရိုက် ပို့ပေးပါဗျာ။", parse_mode="Markdown")
+    elif call.data == "info_slip":
+        bot.send_message(call.message.chat.id, "📸 **AI SLIP VERIFICATION**\n\nစစ်ဆေးလိုသော KBZPay သို့မဟုတ် WavePay ပြေစာ (ရိုးရိုးဖြတ်ပိုင်းဖြစ်စေ၊ QR ပါသည်ဖြစ်စေ) ဓာတ်ပုံကို ပို့ပေးပါ။ Gemini AI မှ စကင်ဖတ်စစ်ဆေးပေးပါမည်။", parse_mode="Markdown")
     elif call.data == "brand_click":
-        bot.send_message(call.message.chat.id, f"🚀 **{BRANDING} Identity & Financial Verification Core v5.0**")
+        bot.send_message(call.message.chat.id, f"🚀 **{BRANDING} Identity & Multimodal AI Core v6.0**")
 
-# =====================================================================
-# 💸 OPENCV-BASED SLIP QR SCANNING LOGIC (Render နှင့် အကိုက်ညီဆုံးစနစ်)
-# =====================================================================
 @bot.message_handler(content_types=['photo'])
 def handle_slip_verification(message):
-    status_msg = bot.reply_to(message, "🔍 *Processing Receipt/Slip Image via OpenCV Core...*", parse_mode="Markdown")
+    status_msg = bot.reply_to(message, "🧠 *PayX AI Core is analyzing your slip image via Gemini...*", parse_mode="Markdown")
     
     try:
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # ဓာတ်ပုံကို RAM ပေါ်မှာတင် တိုက်ရိုက် Byte array အဖြစ်ဖတ်ပြီး OpenCV ထဲသွင်းမည် (Disk ထဲသိမ်းစရာမလို)
-        nparr = np.frombuffer(downloaded_file, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        # Gemini Vision သို့ ပို့၍ စစ်ဆေးခြင်း
+        ai_analysis = call_gemini_vision_api(downloaded_file)
         
-        # OpenCV ရဲ့ Built-in QR Detector ကိုသုံးပြီး ဖတ်ခြင်း (C-library မလိုပါ)
-        detector = cv2.QRCodeDetector()
-        qr_data, bbox, _ = detector.detectAndDecode(img)
-        
-        if not qr_data or qr_data.strip() == "":
-            bot.edit_message_text("❌ **QR Code မတွေ့ရပါ!**\n\nကျေးဇူးပြု၍ ပြေစာ (Slip) ဓာတ်ပုံပေါ်ရှိ QR Code ရှင်းလင်းစွာ ပါဝင်အောင် ပြန်လည်ပေးပို့ပေးပါဗျာ။", message.chat.id, status_msg.message_id, parse_mode="Markdown")
-            return
-
-        is_kpay = "kbzpay" in qr_data.lower() or "qr.kbzpay.com" in qr_data or len(qr_data) == 30
-        is_wave = "wavepay" in qr_data.lower() or "wave.com.mm" in qr_data or ("ref" in qr_data.lower() and len(qr_data) > 40)
-        
-        if is_kpay:
-            ref_match = re.search(r'(?:transid|ref|id)=(\d+)', qr_data, re.IGNORECASE)
-            ref_no = ref_match.group(1) if ref_match else "Verified QR Code Structure"
-            
-            result_ui = (
-                "💸 **KBZPAY RECEIPT VERIFICATION** 💸\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                "🟢 **Status:** `REAL SLIP (အစစ်ဖြစ်နိုင်ခြေများ)`\n"
-                f"🆔 **Transaction Ref:** `{ref_no}`\n"
-                "🛡️ **QR Code Integrity:** `Valid Signed Structure`\n\n"
-                "💡 *မှတ်ချက် - ပြေစာအတုပြုလုပ်သော App များသည် QR Code အမှန်ကို ထည့်သွင်းနိုင်ခြင်း မရှိပါ။ ဤပြေစာသည် QR Code တည်ဆောက်ပုံ မှန်ကန်ပါသည်။*\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🛸 **Verified By :** {BRANDING}"
-            )
-        elif is_wave:
-            result_ui = (
-                "🌊 **WAVEPAY RECEIPT VERIFICATION** 🌊\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                "🟢 **Status:** `REAL SLIP (အစစ်ဖြစ်နိုင်ခြေများ)`\n"
-                "🛡️ **QR Code Integrity:** `Valid Wave-Core Encrypted Data`\n\n"
-                "💡 *သတိပြုရန် - ငွေပမာဏ ကိန်းဂဏန်း လိမ်လည်ထားခြင်း ရှိမရှိကို မိမိ Wave Account ထဲရှိ History နှင့်ပါ တိုက်စစ်ပေးပါရန်။*\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🛸 **Verified By :** {BRANDING}"
-            )
-        else:
-            result_ui = (
-                "⚠️ **UNKNOWN QR CODE DATA** ⚠️\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                "❌ **Status:** `UNVERIFIED / FAKE SLIP RISK`\n"
-                f"📊 **Raw Data:** `{qr_data[:100]}`\n\n"
-                "ဒီ QR Code က KBZPay သို့မဟုတ် WavePay ရဲ့ တရားဝင် ပြေစာတည်ဆောက်ပုံစံ မဟုတ်တဲ့အတွက် ပြေစာအတု (Fake Slip) ဖြစ်နိုင်ခြေ အလွန်များပါတယ် ကိုကို!"
-            )
-            
-        bot.edit_message_text(result_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
+        ui_response = (
+            f"📸 **{BRANDING} AI SLIP AUDIT RESULT**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{ai_analysis}\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ *Disclaimer: AI analysis is based on image OCR. Always double-check your actual bank history!*"
+        )
+        bot.edit_message_text(ui_response, message.chat.id, status_msg.message_id)
         
     except Exception as e:
-        bot.edit_message_text(f"❌ **Error Processing Image:** `{str(e)}`", message.chat.id, status_msg.message_id, parse_mode="Markdown")
+        bot.edit_message_text(f"❌ **Error:** `{str(e)}`", message.chat.id, status_msg.message_id, parse_mode="Markdown")
 
 # =====================================================================
 # Game ID Processing Core

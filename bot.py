@@ -27,7 +27,9 @@ def run_flask():
 # =====================================================================
 BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
 RAPIDAPI_KEY = "06b1562a59msh39810b847e9d0e2p151fd6jsn3a9d60ae50a9"
-GEMINI_API_KEY = "AQ.Ab8RN6Ipt2azCezZViRxbR14ww7UB6Tk43ZnODYJvwXjze4DEA"
+
+# 🔑 ကိုကို့ရဲ့ Key အသစ်စက်စက်
+GEMINI_API_KEY = "AQ.Ab8RN6JfFCYCkroYojWX_EV4X9I4q99xfnxgie6JrW8YQuIAJQ"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 BRANDING = "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
@@ -154,10 +156,10 @@ def call_game_api(game_type, target_id):
     except Exception as e: return None, str(e)
 
 # =====================================================================
-# 🧠 GEMINI AI VISION RECEIPT AUDITOR ENGINE
+# 🧠 GEMINI AI VISION RECEIPT AUDITOR ENGINE (Fixed Payload Syntax)
 # =====================================================================
 def call_gemini_vision_api(image_bytes):
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     
     prompt = (
@@ -172,6 +174,7 @@ def call_gemini_vision_api(image_bytes):
         "Make it look premium, neat, and clean for a Telegram bot response."
     )
     
+    # ✨ FIXED: mime_type အမှန်အတိုင်း သတ်မှတ်ထားပါတယ်
     payload = {
         "contents": [
             {
@@ -179,7 +182,7 @@ def call_gemini_vision_api(image_bytes):
                     {"text": prompt},
                     {
                         "inlineData": {
-                            "mimeType": "image/jpeg",
+                            "mime_type": "image/jpeg",
                             "data": base64_image
                         }
                     }
@@ -199,7 +202,7 @@ def call_gemini_vision_api(image_bytes):
             res_json = response.json()
             return res_json['candidates'][0]['content']['parts'][0]['text']
         else:
-            return f"❌ API Error (Status: {response.status_code})\nGemini API Key မှန်ကန်မှုရှိမရှိ ပြန်စစ်ပေးပါ ကိုကို။"
+            return f"❌ API Error (Status: {response.status_code})\nတုံ့ပြန်မှုချက်- {response.text}"
     except Exception as e:
         return f"❌ Gemini Core Error: {str(e)}"
 

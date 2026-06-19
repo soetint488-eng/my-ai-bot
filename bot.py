@@ -16,7 +16,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "PayX-MM Multi-Game & Slip Duplicate Checker is Online"
+    return "PayX-MM Premium Core Server is Online"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8000))
@@ -46,7 +46,7 @@ def save_hash(img_hash):
 PROCESSED_SLIPS = load_hashes()
 
 # =====================================================================
-# DYNAMIC TYPEWRITER HEADER LOOP ENGINE
+# DYNAMIC TYPEWRITER HEADER LOOP ENGINE (NO TRANSLATION BUG)
 # =====================================================================
 HEADER_FRAMES = [
     "P", "PA", "PAY", "PAYX", "PAYX-", "PAYX-M", "PAYX-MM",
@@ -59,7 +59,7 @@ def persistent_header_loop(chat_id, message_id, base_text, markup):
         try:
             time.sleep(0.3)
             current_frame = HEADER_FRAMES[frame_index]
-            full_content = f"[{current_frame}]\n\n{base_text}"
+            full_content = f"--- [{current_frame}] ---\n{base_text}"
             
             bot.edit_message_text(
                 text=full_content,
@@ -73,41 +73,19 @@ def persistent_header_loop(chat_id, message_id, base_text, markup):
             break
 
 # =====================================================================
-# START COMMAND WITH TYPEWRITER INTRO ANIMATION
+# START COMMAND WITH STYLISH ANIMATION
 # =====================================================================
 def run_start_sequence(chat_id, message_id):
-    # Hardcoded Sequential Logic to Completely Bypass AI Translation Bug
     try:
-        bot.edit_message_text("[P]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PA]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PAY]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PAYX]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PAYX-]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PAYX-M]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PAYX-MM]", chat_id, message_id)
-        time.sleep(0.5)
-        bot.edit_message_text("[PAYX-M]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PAYX-]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PAYX]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PAY]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[PA]", chat_id, message_id)
-        time.sleep(0.15)
-        bot.edit_message_text("[P]", chat_id, message_id)
-        time.sleep(0.15)
+        frames = ["[P]", "[PA]", "[PAY]", "[PAYX]", "[PAYX-]", "[PAYX-M]", "[PAYX-MM]"]
+        for f in frames:
+            bot.edit_message_text(f, chat_id, message_id)
+            time.sleep(0.15)
+        time.sleep(0.3)
         bot.edit_message_text(".", chat_id, message_id)
     except Exception: pass
 
-    guide = "Select target option to verify data:"
+    guide = "====================\n  MAIN CONTROL PANEL\n====================\n\nSelect target option to verify data:"
     markup = InlineKeyboardMarkup()
     btn_ml = InlineKeyboardButton("Mobile Legends", callback_data="info_ml")
     btn_ff = InlineKeyboardButton("Free Fire", callback_data="info_ff")
@@ -157,29 +135,34 @@ def call_game_api(game_type, target_id):
         return None, str(e)
 
 # =====================================================================
-# CALLBACK QUERY SYSTEM & INSTANT NATIVE COPY TRIGGER
+# CALLBACK QUERY SYSTEM & TRUE CLIPBOARD ALERTS
 # =====================================================================
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
+    if call.data.startswith("copy_"):
+        copied_text = call.data.replace("copy_", "")
+        bot.answer_callback_query(call.id, text=f"Text Copied: {copied_text}", show_alert=True)
+        return
+
     bot.answer_callback_query(call.id)
     
     if call.data == "info_ml":
-        msg_text = "Format:\n`/ml [User_ID] ([Zone_ID])`\n\nExample:\n`/ml 2112723799 (19915)`"
+        msg_text = "--- PAYX FORMAT ---\n  /ml [User_ID] ([Zone_ID])\n-------------------\n\nFormat Example:\n/ml 2112723799 (19915)"
         sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
         threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
         
     elif call.data == "info_ff":
-        msg_text = "Format:\n`/ff [Player_UID]`\n\nExample:\n`/ff 3108721457`"
+        msg_text = "--- PAYX FORMAT ---\n  /ff [Player_UID]\n-------------------\n\nFormat Example:\n/ff 3108721457"
         sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
         threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
         
     elif call.data == "info_pubg":
-        msg_text = "Format:\n`/pubg [Character_ID]`\n\nExample:\n`/pubg 5204837417`"
+        msg_text = "--- PAYX FORMAT ---\n  /pubg [Character_ID]\n-------------------\n\nFormat Example:\n/pubg 5204837417"
         sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
         threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
         
     elif call.data == "info_coc":
-        msg_text = "Format:\n`/coc [Player_Tag]`\n\nExample:\n`/coc 20C0RVGL`"
+        msg_text = "--- PAYX FORMAT ---\n  /coc [Player_Tag]\n-------------------\n\nFormat Example:\n/coc 20C0RVGL"
         sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
         threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
         
@@ -199,24 +182,24 @@ def handle_slip_verification(message):
         img_hash = hashlib.md5(downloaded_file).hexdigest()
         
         if img_hash in PROCESSED_SLIPS:
-            ui_response = "Warning: Duplicate transaction detected.\nThis receipt is already registered in database."
+            ui_response = "--- DUPLICATE DETECTED ---\n\nWarning: This receipt is already registered in database."
             sent = bot.reply_to(message, f"[PAYX-MM]\n\n{ui_response}")
             threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, ui_response, None), daemon=True).start()
         else:
             save_hash(img_hash)
-            ui_response = f"Verification Pass: Clean transaction.\n\nToken: `{img_hash[:12]}`"
+            ui_response = f"--- VERIFICATION PASS ---\n\nClean transaction accepted.\n\nToken: `{img_hash[:12]}`"
             sent = bot.reply_to(message, f"[PAYX-MM]\n\n{ui_response}", parse_mode="Markdown")
             threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, ui_response, None), daemon=True).start()
     except Exception as e:
         bot.reply_to(message, f"System Error: {str(e)}")
 
 # =====================================================================
-# CLEAN COPY EXTRACTOR ENGINE WITH TRUE NATIVE ONE-TAP COPY
+# /COPY REPLY HANDLER WITH CYBER TEXT STYLE
 # =====================================================================
 @bot.message_handler(commands=['copy'])
 def handle_reply_copy(message):
     if not message.reply_to_message or not message.reply_to_message.text:
-        return bot.reply_to(message, "Usage: Reply to any context message with /copy")
+        return bot.reply_to(message, "Format Warning: Reply to any context message with /copy")
     
     target_text = message.reply_to_message.text
     lines = [line.strip() for line in target_text.split('\n') if line.strip()]
@@ -233,37 +216,29 @@ def handle_reply_copy(message):
             if item and item not in found_elements and len(item) >= 2:
                 found_elements.append(item)
                 
-                # 🎯 TRUE ONE-TAP CLIPBOARD COPY SYSTEM (Telegram Deep Linking Hack)
-                # Client-Side မှာ တိုက်ရိုက် Clipboard ထဲ ထည့်သွင်းပေးပြီး ခလုတ်နှိပ်ရုံဖြင့် တန်းကူးသွားမည်။
-                btn = InlineKeyboardButton(text=f"{item}", url=f"tg://msg_url?url={item}")
+                btn = InlineKeyboardButton(text=f"Copy: {item}", callback_data=f"copy_{item}")
                 copy_markup.row(btn)
-                monospace_text_block += f"`{item}`\n"
+                monospace_text_block += f"- `{item}`\n"
                 
     if not found_elements:
         return bot.reply_to(message, "Error: No extractable structures identified.")
 
-    base_copy_ui = f"Tap to copy:\n\n{monospace_text_block}"
-    
+    base_copy_ui = f"--- TAP TEXT TO COPY ---\n\n{monospace_text_block}"
     sent_msg = bot.reply_to(message.reply_to_message, f"[PAYX-MM]\n\n{base_copy_ui}", parse_mode="Markdown", reply_markup=copy_markup)
-    
-    threading.Thread(
-        target=persistent_header_loop, 
-        args=(message.chat.id, sent_msg.message_id, base_copy_ui, copy_markup), 
-        daemon=True
-    ).start()
+    threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent_msg.message_id, base_copy_ui, copy_markup), daemon=True).start()
 
 # =====================================================================
-# DATABASE LOOKUP PARSER WITH TYPEWRITER HEADER LOOP & TRUE COPY
+# LOOKUP PARSER WITH REGION VERIFIER & PREMIUM CYBER LAYOUT
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
     display_id = f"{target_id} ({extra_id})" if extra_id else target_id
     api_query_id = f"{target_id}/{extra_id}" if extra_id else target_id
     
-    status_msg = bot.reply_to(message, "Connecting data matrix...")
+    status_msg = bot.reply_to(message, "Scanning mainframe matrix...")
     result, error = call_game_api(game_type, api_query_id)
     
     if error:
-        bot.edit_message_text(f"Error: {error}", message.chat.id, status_msg.message_id)
+        bot.edit_message_text(f"Connection Error: {error}", message.chat.id, status_msg.message_id)
         return
         
     if result:
@@ -276,16 +251,30 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
                     break
         nickname = nickname or "Verified Player"
         
+        region_info = "Unknown"
+        if game_type == "mlbb":
+            region_info = result.get("region") or result.get("zone") or f"Server {extra_id}"
+            
         cool_ui = (
-            f"Name: `{nickname}`\n"
-            f"ID: `{display_id}`\n\n"
-            "Tap to copy:"
+            "-----------------------------\n"
+            "       PLAYER PROFILE        \n"
+            "-----------------------------\n"
+            f" User Name : `{nickname}`\n"
+            f" Player ID : `{target_id}`\n"
+        )
+        
+        if game_type == "mlbb":
+            cool_ui += f" Reg/Server: `{region_info}`\n"
+            
+        cool_ui += (
+            "-----------------------------\n\n"
+            "Tap buttons below to save data:"
         )
         
         copy_markup = InlineKeyboardMarkup()
-        # True One-Tap Copy Method Applied Here
-        btn_copy_name = InlineKeyboardButton(text=f"{nickname}", url=f"tg://msg_url?url={nickname}")
-        btn_copy_id = InlineKeyboardButton(text=f"{target_id}", url=f"tg://msg_url?url={target_id}")
+        btn_copy_name = InlineKeyboardButton(text=f"Copy Name: {nickname}", callback_data=f"copy_{nickname}")
+        btn_copy_id = InlineKeyboardButton(text=f"Copy ID: {target_id}", callback_data=f"copy_{target_id}")
+        
         copy_markup.row(btn_copy_name)
         copy_markup.row(btn_copy_id)
         
@@ -303,25 +292,25 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
 @bot.message_handler(commands=['ml'])
 def handle_ml(message):
     match = re.search(r'/ml\s+(\d+)\s*\((.*?)\)', message.text)
-    if not match: return bot.reply_to(message, "Invalid Format. Use: /ml 2112723799 (19915)")
+    if not match: return bot.reply_to(message, "Format Warning: Use /ml 2112723799 (19915)")
     parse_and_send_result(message, "mlbb", match.group(1), match.group(2).strip())
 
 @bot.message_handler(commands=['ff'])
 def handle_ff(message):
     args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Invalid Format. Use: /ff [UID]")
+    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /ff [UID]")
     parse_and_send_result(message, "ff", args[1])
 
 @bot.message_handler(commands=['pubg'])
 def handle_pubg(message):
     args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Invalid Format. Use: /pubg [ID]")
+    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /pubg [ID]")
     parse_and_send_result(message, "pubg", args[1])
 
 @bot.message_handler(commands=['coc'])
 def handle_coc(message):
     args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Invalid Format. Use: /coc [Tag]")
+    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /coc [Tag]")
     player_tag = args[1].replace("#", "").strip()
     parse_and_send_result(message, "coc", player_tag)
 

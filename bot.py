@@ -22,10 +22,10 @@ def run_flask():
     flask_app.run(host="0.0.0.0", port=port)
 
 # =====================================================================
-# Bot Configuration (Token & API Key Setup)
+# Bot Configuration (ပုံပါ RapidAPI Key အသစ်ဖြင့် လဲလှယ်ထားသည်)
 # =====================================================================
 BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
-RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
+RAPIDAPI_KEY = "06b1562a59msh39810b847e9d0e2p151fd6jsn3a9d60ae50a9"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -85,52 +85,35 @@ def animate_start_menu(chat_id, message_id):
             break
 
 # =====================================================================
-# ⌨️ INTRO TYPEWRITER & ERASE CORE ( /start အတွက် သီးသန့် အထူးလုပ်ဆောင်ချက် )
+# ⌨️ INTRO TYPEWRITER & ERASE CORE
 # =====================================================================
 def run_start_intro_animation(chat_id, initial_msg_id):
-    """/start နှိပ်လိုက်ရင် စာလုံးတစ်လုံးချင်းပေါ်ပြီး ပြန်ဖျက်ကာ Menu တက်လာမည့် စနစ်"""
-    
-    # ၁။ ရိုက်ပြမည့် အဆင့်ဆင့် (Type Forward)
     typing_steps = [
-        "⏳ 𝑷...",
-        "⏳ 𝑷𝒂...",
-        "⏳ 𝑷𝒂𝒚...",
-        "⏳ 𝑷𝒂𝒚𝑿...",
-        "⏳ 𝑷𝒂𝒚𝑿-...",
-        "⏳ 𝑷𝒂𝒚𝑿-𝑴...",
-        "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
+        "⏳ 𝑷...", "⏳ 𝑷𝒂...", "⏳ 𝑷𝒂𝒚...", "⏳ 𝑷𝒂𝒚𝑿...", 
+        "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿-𝑴...", "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
     ]
-    
     for step in typing_steps:
         try:
             bot.edit_message_text(f"`{step}`", chat_id, initial_msg_id, parse_mode="Markdown")
-            time.sleep(0.25) # ရိုက်ပြမည့်အရှိန်
+            time.sleep(0.25)
         except Exception:
             pass
             
-    time.sleep(0.6) # စာသားအပြည့်အစုံကို ခဏပြထားမည်
+    time.sleep(0.6)
     
-    # ၂။ ၎င်းစာသားကို နောက်ပြန် ပြန်ဖျက်ပစ်မည့်အဆင့် (Backward Erase)
     erase_steps = [
-        "⏳ 𝑷𝒂𝒚𝑿-𝑴...",
-        "⏳ 𝑷𝒂𝒚𝑿-...",
-        "⏳ 𝑷𝒂𝒚𝑿...",
-        "⏳ 𝑷𝒂𝒚...",
-        "⏳ 𝑷𝒂...",
-        "⏳ 𝑷...",
-        "⏳ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘓𝘰𝘢𝘥𝘪𝘯𝘨..."
+        "⏳ 𝑷𝒂𝒚𝑿-𝑴...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿...", 
+        "⏳ 𝑷𝒂𝒚...", "⏳ 𝑷...", "⏳ System Loading..."
     ]
-    
     for step in erase_steps:
         try:
             bot.edit_message_text(f"`{step}`", chat_id, initial_msg_id, parse_mode="Markdown")
-            time.sleep(0.15) # ဖျက်မည့်အရှိန် (နည်းနည်းပိုမြန်စေရန်)
+            time.sleep(0.15)
         except Exception:
             pass
 
     time.sleep(0.3)
 
-    # ၃။ အားလုံးပြီးသွားပြီဖြစ်လို့ ပင်မ Guide စာသားနှင့် Buttons များကို တစ်ခါတည်း ထုတ်ပြခြင်း
     guide = (
         "⚔️ **PREMIUM AUTOMATION ID CHECKER** ⚔️\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -151,13 +134,12 @@ def run_start_intro_animation(chat_id, initial_msg_id):
     
     try:
         bot.edit_message_text(guide, chat_id, initial_msg_id, parse_mode="Markdown", reply_markup=markup)
-        # ခလုတ်များ လင်းလိုက်မှိတ်လိုက် ဖြစ်စေမည့် Thread ကို စတင်မောင်းနှင်ခြင်း
         threading.Thread(target=animate_start_menu, args=(chat_id, initial_msg_id), daemon=True).start()
     except Exception:
         pass
 
 # =====================================================================
-# 🎯 API DYNAMIC ROUTER 
+# 🎯 API DYNAMIC ROUTER
 # =====================================================================
 def call_game_api(game_type, target_id):
     headers = {
@@ -185,21 +167,13 @@ def call_game_api(game_type, target_id):
     except Exception as e: return None, str(e)
 
 # =====================================================================
-# Bot Handlers & UI
+# Bot Handlers & UI (Font Error ကင်းစင်အောင် ပြင်ဆင်ပြီး)
 # =====================================================================
 
-# ၁။ /start Command Handler (အထူး Intro သစ်ဖြင့် ပြင်ဆင်ပြီး)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    # အရင်ဆုံး စာသားအလွတ်တစ်ခုကို ရိုက်ပြရန် Message တစ်ခု ကြိုတင်ထုတ်လိုက်သည်
     sent_msg = bot.send_message(message.chat.id, "`⏳ Connecting...`", parse_mode="Markdown")
-    
-    # Intro Animation ကို Background သီးသန့် Thread ခွဲပြီး အလုပ်လုပ်စေခြင်း
-    threading.Thread(
-        target=run_start_intro_animation, 
-        args=(message.chat.id, sent_msg.message_id), 
-        daemon=True
-    ).start()
+    threading.Thread(target=run_start_intro_animation, args=(message.chat.id, sent_msg.message_id), daemon=True).start()
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_game_info(call):
@@ -245,15 +219,16 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         systems = {"mlbb": "Moonton Live Link", "ff": "Garena Core Database", "pubg": "Tencent Live Core", "coc": "Supercell Live Core"}
         id_labels = {"mlbb": "User ID & Zone", "ff": "Player UID", "pubg": "Character ID", "coc": "Player Tag"}
         
+        # 🛠️ FONT ERROR FIX: စာလုံးအစောင်းကွက်များကို Standard Text ပုံစံသို့ ပြောင်းလဲထားပါသည်
         cool_ui = (
             f"👑 **{titles[game_type]}** 👑\n"
-            f"🧬 𝘚𝘺𝘴𝘵𝘦𝕞: {systems[game_type]}\n"
+            f"🧬 System: {systems[game_type]}\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👤 **𝘗𝘭𝘢𝘺𝘦𝘳 𝘕𝘢𝘮𝒆 :** `{nickname}`\n"
-            f"🌐 **𝘙𝘦𝘨ိယon / 𝘊𝘰𝘶尋ntရီ:** `{pretty_region}`\n"
+            f"👤 **Player Name :** `{nickname}`\n"
+            f"🌐 **Region / Country :** `{pretty_region}`\n"
             f"🆔 **{id_labels[game_type]} :** `{display_id}`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🛸 **𝘘𝘶𝘦𝘳𝘺 𝘝𝘦𝘳ိified 𝘉𝘺 :** {BRANDING}"
+            f"🛸 **Query Verified By :** {BRANDING}"
         )
         
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")

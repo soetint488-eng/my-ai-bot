@@ -47,16 +47,6 @@ def save_hash(img_hash):
 PROCESSED_SLIPS = load_hashes()
 
 # =====================================================================
-# NANO MONOSPACE FONT GENERATOR (FOR INSIDE BUTTON TEXT)
-# =====================================================================
-def to_nano_font(text):
-    """ ခလုတ်ထဲတွင် Monospace ပုံစံပေါက်စေရန် စာလုံးများကို Unicode အလှပြောင်းပေးသော စနစ် """
-    normal_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    mono_chars   = "𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂帶𝚄𝚅𝚆𝚇𝚈𝚉𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"
-    trans_table = str.maketrans(normal_chars, mono_chars)
-    return text.translate(trans_table)
-
-# =====================================================================
 # DYNAMIC TYPEWRITER HEADER LOOP ENGINE
 # =====================================================================
 HEADER_FRAMES = [
@@ -146,15 +136,21 @@ def call_game_api(game_type, target_id):
         return None, str(e)
 
 # =====================================================================
-# CALLBACK QUERY SYSTEM (TRUE SILENT BACKGROUND COPY ENGINE)
+# CALLBACK QUERY SYSTEM (TRUE BACKGROUND COPY + DELETE ENGINE)
 # =====================================================================
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
-    # ခလုတ်နှိပ်လိုက်လျှင် Keyboard ကြီးပွင့်မလာဘဲ သန့်ရှင်းစွာ Copy ကူးပေးမည့်အပိုင်း
+    # Copy ခလုတ်နှိပ်လျှင် အသံတိတ် ကူးယူပေးမည့်အပိုင်း
     if call.data.startswith("copy_"):
-        # text စာသားကို ဗလာ (None) ထားခြင်းဖြင့် ဖုန်း screen ပေါ်တွင် မည်သည့်စာတန်းမှ တက်မလာဘဲ 
-        # Background ထဲတွင် တန်းပြီး Copy ဝင်သွားစေပါသည် (ZURI Bot ပုံစံအတိုင်းဖြစ်သည်)
         bot.answer_callback_query(call.id, text=None, show_alert=False)
+        return
+
+    # Delete ခလုတ်နှိပ်လျှင် Message ကို ချက်ချင်းဖျက်ပေးမည့်အပိုင်း
+    if call.data == "delete_msg":
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception:
+            pass
         return
 
     bot.answer_callback_query(call.id)
@@ -207,7 +203,7 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"System Error: {str(e)}")
 
 # =====================================================================
-# /COPY REPLY HANDLER (ZURI BOT TYPE BACKGROUND COPY)
+# /COPY REPLY HANDLER (ZURI BOT SINGLE COPY + DELETE STYLE)
 # =====================================================================
 @bot.message_handler(commands=['copy'])
 def handle_reply_copy(message):
@@ -217,10 +213,7 @@ def handle_reply_copy(message):
     target_text = message.reply_to_message.text
     lines = [line.strip() for line in target_text.split('\n') if line.strip()]
     
-    copy_markup = InlineKeyboardMarkup()
     found_elements = []
-    monospace_text_block = ""
-
     for raw_item in lines:
         if "/copy" in raw_item.lower() or "payx" in raw_item.lower():
             continue
@@ -229,21 +222,27 @@ def handle_reply_copy(message):
             if item and item not in found_elements and len(item) >= 2:
                 found_elements.append(item)
                 
-                # ZURI Group ကဲ့သို့ ခလုတ်ပေါ်တွင် စာသားကို သန့်ရှင်းစွာပြသပြီး Keyboard မပွင့်ဘဲ ကူးယူစေခြင်း
-                nano_text = to_nano_font(item)
-                btn = InlineKeyboardButton(text=f"📋 {nano_text}", callback_data=f"copy_{item}")
-                copy_markup.row(btn)
-                monospace_text_block += f"- `{item}`\n"
-                
     if not found_elements:
         return bot.reply_to(message, "Error: No extractable structures identified.")
 
-    base_copy_ui = f"--- TAP TEXT TO COPY ---\n\n{monospace_text_block}"
-    sent_msg = bot.reply_to(message.reply_to_message, f"[PAYX-MM]\n\n{base_copy_ui}", parse_mode="Markdown", reply_markup=copy_markup)
-    threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent_msg.message_id, base_copy_ui, copy_markup), daemon=True).start()
+    # တွေ့ရှိသမျှ စာသားအားလုံးကို စုစည်းပြီး စာသားတစ်ခုတည်းအဖြစ် တည်ဆောက်ခြင်း
+    combined_text = " ".join(found_elements)
+    
+    cool_ui = f"**{BRANDING}**\n\n`{combined_text}`"
+    
+    # ခလုတ် Layout အား ZURI ပုံစံအတိုင်း Copy နှင့် Delete သာ ထားရှိခြင်း
+    copy_markup = InlineKeyboardMarkup()
+    btn_copy = InlineKeyboardButton(text="🤸‍♀️ 📋 Copy 🤍", callback_data=f"copy_{combined_text}")
+    btn_delete = InlineKeyboardButton(text="Delete", callback_data="delete_msg")
+    
+    copy_markup.row(btn_copy)
+    copy_markup.row(btn_delete)
+
+    sent_msg = bot.reply_to(message.reply_to_message, cool_ui, parse_mode="Markdown", reply_markup=copy_markup)
+    threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent_msg.message_id, cool_ui, copy_markup), daemon=True).start()
 
 # =====================================================================
-# LOOKUP PARSER WITH ZURI-BOT STYLE BACKGROUND COPY BUTTONS
+# LOOKUP PARSER WITH ZURI-BOT LAYOUT (TEXT ON TOP + COPY/DELETE BUTTONS)
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
     api_query_id = f"{target_id}/{extra_id}" if extra_id else target_id
@@ -265,47 +264,28 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
                     break
         nickname = nickname or "Verified Player"
         
-        country_info = "Not Found"
-        if game_type == "mlbb":
-            country_info = result.get("country") or result.get("region") or result.get("zone")
-            if not country_info:
-                for key in ["data", "result"]:
-                    if key in result and isinstance(result[key], dict):
-                        inner = result[key]
-                        country_info = inner.get("country") or inner.get("region") or inner.get("zone")
-                        break
-            
-            if not country_info or country_info == extra_id:
-                country_info = f"Global Server ({extra_id})"
-            
+        # ID ပုံစံတည်ဆောက်မှု (Zone ပါရင် တွဲပြရန်)
+        full_id_display = f"{target_id} ({extra_id})" if extra_id else f"{target_id}"
+        
+        # ZURI Bot အတိုင်း အပေါ်တွင် Name နဲ့ ID ကို Text သီးသန့်ပဲပြသရန် ပုံစံချခြင်း
         cool_ui = (
-            "-----------------------------\n"
-            "       PLAYER PROFILE        \n"
-            "-----------------------------\n"
-            f" User Name : `{nickname}`\n"
-            f" Player ID : `{target_id}`\n"
+            f"**{BRANDING}**\n\n"
+            f"Name: `{nickname}`\n"
+            f"ID: `{full_id_display}`"
         )
         
-        if game_type == "mlbb":
-            cool_ui += f" Country   : `{country_info}`\n"
-            
-        cool_ui += (
-            "-----------------------------\n\n"
-            "Tap buttons below to copy instantly:"
-        )
+        # Copy ယူမည့် Data အစုအဝေး
+        payload_data = f"{nickname} {full_id_display}"
         
-        # ZURI Bot ပုံစံအတိုင်း ခလုတ်နှိပ်လျှင် Keyboard မပွင့်ဘဲ Background ထဲတန်းကူးပေးမည့် Engine
+        # Markup ကို Copy တစ်ခု၊ Delete တစ်ခုပဲ ထွက်အောင် စီစဉ်ခြင်း
         copy_markup = InlineKeyboardMarkup()
-        nano_nickname = to_nano_font(nickname)
-        nano_target_id = to_nano_font(target_id)
+        btn_copy = InlineKeyboardButton(text="🤸‍♀️ 📋 Copy 🤍", callback_data=f"copy_{payload_data}")
+        btn_delete = InlineKeyboardButton(text="Delete", callback_data="delete_msg")
         
-        btn_copy_name = InlineKeyboardButton(text=f"📋 {nano_nickname}", callback_data=f"copy_{nickname}")
-        btn_copy_id = InlineKeyboardButton(text=f"📋 {nano_target_id}", callback_data=f"copy_{target_id}")
+        copy_markup.row(btn_copy)
+        copy_markup.row(btn_delete)
         
-        copy_markup.row(btn_copy_name)
-        copy_markup.row(btn_copy_id)
-        
-        bot.edit_message_text(f"[PAYX-MM]\n\n{cool_ui}", message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
+        bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
         
         threading.Thread(
             target=persistent_header_loop, 

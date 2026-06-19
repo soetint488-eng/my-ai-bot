@@ -7,12 +7,8 @@ import requests
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
-from PIL import Image
-# QR code ဖတ်ရန်အတွက် pyzbar ကို သုံးထားပါတယ် (Render အတွက် ပိုအဆင်ပြေစေရန်)
-try:
-    from pyzbar.pyzbar import decode
-except ImportError:
-    decode = None
+import cv2
+import numpy as np
 
 # =====================================================================
 # 🛠️ RENDER PORT BINDING ERROR FIX (FLASK WEB SERVER)
@@ -37,7 +33,6 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 BRANDING = "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
 
-# 🌍 Universal Country/Region Code Mapping
 COUNTRY_MAP = {
     "mm": "🇲🇲 Myanmar", "myanmar": "🇲🇲 Myanmar", "burma": "🇲🇲 Myanmar",
     "id": "🇮🇩 Indonesia", "indonesia": "🇮🇩 Indonesia",
@@ -199,53 +194,39 @@ def callback_game_info(call):
     elif call.data == "info_coc":
         bot.send_message(call.message.chat.id, "🏰 **CLASH OF CLANS QUERY**\n\nFormat:\n`/coc [Player_Tag]`\n\n💡 **Example:**\n`/coc 20C0RVGL`", parse_mode="Markdown")
     elif call.data == "info_kpay":
-        bot.send_message(call.message.chat.id, "💸 **KBZPAY SLIP VERIFICATION**\n\nစစ်ဆေးလိုသော KBZPay ပြေစာ (Slip) ဓာတ်ပုံကို Bot ဆီသို့ တိုက်ရိုက် ပို့ပေးပါဗျာ။ စနစ်က QR Code ကို ဖတ်ပြီး အတု/အစစ် ခွဲခြားပေးပါမည်။", parse_mode="Markdown")
+        bot.send_message(call.message.chat.id, "💸 **KBZPAY SLIP VERIFICATION**\n\nစစ်ဆေးလိုသော KBZPay ပြေစာ (Slip) ဓာတ်ပုံကို Bot ဆီသို့ တိုက်ရိုက် ပို့ပေးပါဗျာ။", parse_mode="Markdown")
     elif call.data == "info_wave":
         bot.send_message(call.message.chat.id, "🌊 **WAVEPAY SLIP VERIFICATION**\n\nစစ်ဆေးလိုသော WavePay ပြေစာ (Slip) ဓာတ်ပုံကို Bot ဆီသို့ တိုက်ရိုက် ပို့ပေးပါဗျာ။", parse_mode="Markdown")
     elif call.data == "brand_click":
         bot.send_message(call.message.chat.id, f"🚀 **{BRANDING} Identity & Financial Verification Core v5.0**")
 
 # =====================================================================
-# 💸 SLIP QR-CODE SCANNING & VERIFICATION LOGIC (ဓာတ်ပုံပို့ရင် စစ်ပေးမည့်စနစ်)
+# 💸 OPENCV-BASED SLIP QR SCANNING LOGIC (Render နှင့် အကိုက်ညီဆုံးစနစ်)
 # =====================================================================
 @bot.message_handler(content_types=['photo'])
 def handle_slip_verification(message):
-    status_msg = bot.reply_to(message, "🔍 *Processing Receipt/Slip Image...*", parse_mode="Markdown")
+    status_msg = bot.reply_to(message, "🔍 *Processing Receipt/Slip Image via OpenCV Core...*", parse_mode="Markdown")
     
     try:
-        # ၁။ Telegram ဆီက ဓာတ်ပုံကို ဒေါင်းလုဒ်ဆွဲခြင်း
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        image_path = f"slip_{message.chat.id}_{int(time.time())}.jpg"
-        with open(image_path, 'wb') as new_file:
-            new_file.write(downloaded_file)
-            
-        # ၂။ QR Code Decode လုပ်ပြီး ဒေတာရှာခြင်း
-        if decode is None:
-            bot.edit_message_text("❌ `pyzbar` library မရှိပါသဖြင့် QR ကုဒ် မဖတ်နိုင်ပါ။ Developer အား အကြောင်းကြားပါ။", message.chat.id, status_msg.message_id, parse_mode="Markdown")
-            if os.path.exists(image_path): os.remove(image_path)
-            return
-
-        img = Image.open(image_path)
-        decoded_objects = decode(img)
+        # ဓာတ်ပုံကို RAM ပေါ်မှာတင် တိုက်ရိုက် Byte array အဖြစ်ဖတ်ပြီး OpenCV ထဲသွင်းမည် (Disk ထဲသိမ်းစရာမလို)
+        nparr = np.frombuffer(downloaded_file, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        if os.path.exists(image_path): 
-            os.remove(image_path) # နေရာမစားအောင် ဖျက်ပစ်သည်
-
-        if not decoded_objects:
+        # OpenCV ရဲ့ Built-in QR Detector ကိုသုံးပြီး ဖတ်ခြင်း (C-library မလိုပါ)
+        detector = cv2.QRCodeDetector()
+        qr_data, bbox, _ = detector.detectAndDecode(img)
+        
+        if not qr_data or qr_data.strip() == "":
             bot.edit_message_text("❌ **QR Code မတွေ့ရပါ!**\n\nကျေးဇူးပြု၍ ပြေစာ (Slip) ဓာတ်ပုံပေါ်ရှိ QR Code ရှင်းလင်းစွာ ပါဝင်အောင် ပြန်လည်ပေးပို့ပေးပါဗျာ။", message.chat.id, status_msg.message_id, parse_mode="Markdown")
             return
 
-        qr_data = decoded_objects[0].data.decode('utf-8')
-        
-        # ၃။ KBZPay သို့မဟုတ် WavePay ဟုတ်မဟုတ် ဒေတာကို ခွဲခြားစိတ်ဖြာခြင်း
-        is_kpay = "kbzpay" in qr_data.lower() or "qr.kbzpay.com" in qr_data or len(qr_data) == 30 # ပုံမှန် KPay merchant data တည်ဆောက်ပုံ
+        is_kpay = "kbzpay" in qr_data.lower() or "qr.kbzpay.com" in qr_data or len(qr_data) == 30
         is_wave = "wavepay" in qr_data.lower() or "wave.com.mm" in qr_data or ("ref" in qr_data.lower() and len(qr_data) > 40)
         
-        # ⚠️ မှတ်ချက် - Live Bank API မရှိပါက ပုံမှန် QR data format မှန်မမှန် စစ်ဆေးပေးခြင်းဖြစ်သည်
         if is_kpay:
-            # ဥပမာ KBZPay ဒေတာထဲက TransID များကို ဆွဲထုတ်ခြင်း (ပုံသေနည်းအရ)
             ref_match = re.search(r'(?:transid|ref|id)=(\d+)', qr_data, re.IGNORECASE)
             ref_no = ref_match.group(1) if ref_match else "Verified QR Code Structure"
             

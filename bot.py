@@ -136,21 +136,14 @@ def call_game_api(game_type, target_id):
         return None, str(e)
 
 # =====================================================================
-# CALLBACK QUERY SYSTEM (TRUE BACKGROUND COPY + DELETE ENGINE)
+# CALLBACK QUERY SYSTEM (DELETE ENGINE)
 # =====================================================================
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
-    # Copy ခလုတ်နှိပ်လျှင် အသံတိတ် ကူးယူပေးမည့်အပိုင်း
-    if call.data.startswith("copy_"):
-        bot.answer_callback_query(call.id, text=None, show_alert=False)
-        return
-
-    # Delete ခလုတ်နှိပ်လျှင် Message ကို ချက်ချင်းဖျက်ပေးမည့်အပိုင်း
     if call.data == "delete_msg":
         try:
             bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception:
-            pass
+        except Exception: pass
         return
 
     bot.answer_callback_query(call.id)
@@ -203,7 +196,7 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"System Error: {str(e)}")
 
 # =====================================================================
-# /COPY REPLY HANDLER (ZURI BOT SINGLE COPY + DELETE STYLE)
+# /COPY REPLY HANDLER WITH TRUE WEB APP COPY ENGINE
 # =====================================================================
 @bot.message_handler(commands=['copy'])
 def handle_reply_copy(message):
@@ -225,14 +218,14 @@ def handle_reply_copy(message):
     if not found_elements:
         return bot.reply_to(message, "Error: No extractable structures identified.")
 
-    # တွေ့ရှိသမျှ စာသားအားလုံးကို စုစည်းပြီး စာသားတစ်ခုတည်းအဖြစ် တည်ဆောက်ခြင်း
     combined_text = " ".join(found_elements)
-    
     cool_ui = f"**{BRANDING}**\n\n`{combined_text}`"
     
-    # ခလုတ် Layout အား ZURI ပုံစံအတိုင်း Copy နှင့် Delete သာ ထားရှိခြင်း
+    # ကိုကို ဆောက်လိုက်တဲ့ Vercel Link ကို ချိတ်ဆက်ခြင်း
+    copy_web_url = f"https://payx-copy-app.vercel.app?text={requests.utils.quote(combined_text)}"
+    
     copy_markup = InlineKeyboardMarkup()
-    btn_copy = InlineKeyboardButton(text="🤸‍♀️ 📋 Copy 🤍", callback_data=f"copy_{combined_text}")
+    btn_copy = InlineKeyboardButton(text="🤸‍♀️ 📋 Copy 🤍", web_app=telebot.types.WebAppInfo(url=copy_web_url))
     btn_delete = InlineKeyboardButton(text="Delete", callback_data="delete_msg")
     
     copy_markup.row(btn_copy)
@@ -242,7 +235,7 @@ def handle_reply_copy(message):
     threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent_msg.message_id, cool_ui, copy_markup), daemon=True).start()
 
 # =====================================================================
-# LOOKUP PARSER WITH ZURI-BOT LAYOUT (TEXT ON TOP + COPY/DELETE BUTTONS)
+# LOOKUP PARSER WITH ZURI-STYLE TRUE WEB APP COPY SYSTEM
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
     api_query_id = f"{target_id}/{extra_id}" if extra_id else target_id
@@ -264,22 +257,24 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
                     break
         nickname = nickname or "Verified Player"
         
-        # ID ပုံစံတည်ဆောက်မှု (Zone ပါရင် တွဲပြရန်)
         full_id_display = f"{target_id} ({extra_id})" if extra_id else f"{target_id}"
         
-        # ZURI Bot အတိုင်း အပေါ်တွင် Name နဲ့ ID ကို Text သီးသန့်ပဲပြသရန် ပုံစံချခြင်း
+        # UI စာသား ပုံစံချခြင်း
         cool_ui = (
             f"**{BRANDING}**\n\n"
             f"Name: `{nickname}`\n"
             f"ID: `{full_id_display}`"
         )
         
-        # Copy ယူမည့် Data အစုအဝေး
+        # Clipboard ထဲ Auto ဝင်မည့် စာသားပုံစံ
         payload_data = f"{nickname} {full_id_display}"
         
-        # Markup ကို Copy တစ်ခု၊ Delete တစ်ခုပဲ ထွက်အောင် စီစဉ်ခြင်း
+        # ကိုကို့ရဲ့ ကိုယ်ပိုင် Vercel Link ဖြင့် Web App Trigger ဆောက်ခြင်း
+        copy_web_url = f"https://payx-copy-app.vercel.app?text={requests.utils.quote(payload_data)}"
+        
         copy_markup = InlineKeyboardMarkup()
-        btn_copy = InlineKeyboardButton(text="🤸‍♀️ 📋 Copy 🤍", callback_data=f"copy_{payload_data}")
+        # web_app ကို သုံးထားသောကြောင့် ခလုတ်နှိပ်လျှင် "Copied to clipboard..." ဆိုပြီး Background ကနေ တန်းကူးပေးသွားပါမည်
+        btn_copy = InlineKeyboardButton(text="🤸‍♀️ 📋 Copy 🤍", web_app=telebot.types.WebAppInfo(url=copy_web_url))
         btn_delete = InlineKeyboardButton(text="Delete", callback_data="delete_msg")
         
         copy_markup.row(btn_copy)

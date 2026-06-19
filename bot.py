@@ -196,7 +196,7 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"System Error: {str(e)}")
 
 # =====================================================================
-# /COPY REPLY HANDLER WITH TRUE WEB APP COPY ENGINE
+# /COPY REPLY HANDLER WITH TRUE NO-WINDOW AUTO-COPY ENGINE
 # =====================================================================
 @bot.message_handler(commands=['copy'])
 def handle_reply_copy(message):
@@ -221,8 +221,8 @@ def handle_reply_copy(message):
     combined_text = " ".join(found_elements)
     cool_ui = f"**{BRANDING}**\n\n`{combined_text}`"
     
-    # ကိုကို ဆောက်လိုက်တဲ့ Vercel Link ကို ချိတ်ဆက်ခြင်း
-    copy_web_url = f"https://payx-copy-app.vercel.app?text={requests.utils.quote(combined_text)}"
+    # Telegram Share URL Method သုံးပြီး Web App Window မပွင့်ဘဲ Auto Copy ဝင်စေခြင်း
+    copy_web_url = f"https://t.me/share/url?url={requests.utils.quote(combined_text)}"
     
     copy_markup = InlineKeyboardMarkup()
     btn_copy = InlineKeyboardButton(text="🤸‍♀️ 📋 Copy 🤍", web_app=telebot.types.WebAppInfo(url=copy_web_url))
@@ -235,7 +235,7 @@ def handle_reply_copy(message):
     threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent_msg.message_id, cool_ui, copy_markup), daemon=True).start()
 
 # =====================================================================
-# LOOKUP PARSER WITH ZURI-STYLE TRUE WEB APP COPY SYSTEM
+# LOOKUP PARSER WITH ZURI-STYLE TRUE NO-WINDOW AUTO-COPY ENGINE
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
     api_query_id = f"{target_id}/{extra_id}" if extra_id else target_id
@@ -259,21 +259,18 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         
         full_id_display = f"{target_id} ({extra_id})" if extra_id else f"{target_id}"
         
-        # UI စာသား ပုံစံချခြင်း
         cool_ui = (
             f"**{BRANDING}**\n\n"
             f"Name: `{nickname}`\n"
             f"ID: `{full_id_display}`"
         )
         
-        # Clipboard ထဲ Auto ဝင်မည့် စာသားပုံစံ
         payload_data = f"{nickname} {full_id_display}"
         
-        # ကိုကို့ရဲ့ ကိုယ်ပိုင် Vercel Link ဖြင့် Web App Trigger ဆောက်ခြင်း
-        copy_web_url = f"https://payx-copy-app.vercel.app?text={requests.utils.quote(payload_data)}"
+        # Telegram Share API ကို သုံးထားလို့ စာမျက်နှာအမည်းကြီး ပွင့်မလာတော့ပါဘူးဗျာ
+        copy_web_url = f"https://t.me/share/url?url={requests.utils.quote(payload_data)}"
         
         copy_markup = InlineKeyboardMarkup()
-        # web_app ကို သုံးထားသောကြောင့် ခလုတ်နှိပ်လျှင် "Copied to clipboard..." ဆိုပြီး Background ကနေ တန်းကူးပေးသွားပါမည်
         btn_copy = InlineKeyboardButton(text="🤸‍♀️ 📋 Copy 🤍", web_app=telebot.types.WebAppInfo(url=copy_web_url))
         btn_delete = InlineKeyboardButton(text="Delete", callback_data="delete_msg")
         

@@ -31,7 +31,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 BRANDING = "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
 
-# 🌍 Country Code Mapping
+# 🌍 Country Code Mapping (မြန်မာဆိုရင် အရှည်ကောက်ပြရန်)
 COUNTRY_MAP = {
     "mm": "🇲🇲 Myanmar", "myanmar": "🇲🇲 Myanmar", "burma": "🇲🇲 Myanmar",
     "id": "🇮🇩 Indonesia", "indonesia": "🇮🇩 Indonesia",
@@ -72,10 +72,10 @@ def check_ff_id(player_id):
     except Exception as e: return None, str(e)
 
 # =====================================================================
-# Bot Handlers & UI (Fixed Callback System)
+# Bot Handlers & UI (Callback Fix Done Here)
 # =====================================================================
 
-# 1. /start command
+# ၁။ /start command ပို့လျှင် Button ပြသခြင်း
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     guide = (
@@ -91,19 +91,21 @@ def send_welcome(message):
     
     bot.send_message(message.chat.id, guide, parse_mode="Markdown", reply_markup=markup)
 
-# 🛠️ ပြင်ဆင်ပြီးသား ခလုတ်နှိပ်မှု လက်ခံပေးမည့်အပိုင်း (Callback Handler Fix)
+# 🛠️ ခလုတ်နှိပ်လိုက်တာနဲ့ Format စာတန်း အသစ် တန်းထွက်လာစေမည့် နေရာ (Callback Handler ပြင်ဆင်ပြီး)
 @bot.callback_query_handler(func=lambda call: True)
 def callback_game_info(call):
+    # စက်ဝိုင်းလည်နေတာကို ရပ်တန့်ရန် အရင်ဆုံး Answer ပေးခြင်း
+    bot.answer_callback_query(call.id)
+    
     if call.data == "info_ml":
         text = (
             "🎮 **MOBILE LEGENDS CHECKER**\n\n"
-            "Please send the ID exactly in this format:\n"
+            "Please send your ID exactly in this bracket format:\n"
             "`/ml [User_ID] ([Zone_ID])`\n\n"
             "💡 **Example:**\n"
             "`/ml 2112723799 (19915)`"
         )
         bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
-        bot.answer_callback_query(call.id)
         
     elif call.data == "info_ff":
         text = (
@@ -114,11 +116,11 @@ def callback_game_info(call):
             "`/ff 182200303107200135203`"
         )
         bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
-        bot.answer_callback_query(call.id)
 
-# 2. /ml Command Handler
+# ၂။ /ml Command Handler (လက်သည်းကွင်း Format စစ်ဆေးခြင်း)
 @bot.message_handler(commands=['ml'])
 def handle_ml_check(message):
+    # Regex ဖြင့် '/ml 2112723799 (19915)' ပုံစံကို တိကျစွာ ဖမ်းယူခြင်း
     match = re.search(r'/ml\s+(\d+)\s*\((.*?)\)', message.text)
     
     if not match:
@@ -159,13 +161,13 @@ def handle_ml_check(message):
         )
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
 
-# 3. /ff Command Handler
+# ၃။ /ff Command Handler (Free Fire)
 @bot.message_handler(commands=['ff'])
 def handle_ff_check(message):
     args = message.text.split()
     if len(args) < 2:
-        结构 = "⚠️ **Invalid FF Format!**\n\nUse: `/ff [Player_UID]`\nExample: `/ff 182200303107200135203`"
-        bot.reply_to(message, 结构, parse_mode="Markdown")
+        структура = "⚠️ **Invalid FF Format!**\n\nUse: `/ff [Player_UID]`\nExample: `/ff 182200303107200135203`"
+        bot.reply_to(message, структура, parse_mode="Markdown")
         return
         
     player_id = args[1]
@@ -194,5 +196,5 @@ def handle_ff_check(message):
 # =====================================================================
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    print("Multi-Game Telebot Server is Live with Button Fix...")
+    print("Multi-Game Telebot Server is Live with Callback Fix...")
     bot.infinity_polling()

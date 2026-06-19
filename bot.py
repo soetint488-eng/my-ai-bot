@@ -231,7 +231,7 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"❌ **System Error:** `{str(e)}`", parse_mode="Markdown")
 
 # =====================================================================
-# Game ID Processing Core (With Tap to Copy Inline Buttons)
+# Game ID Processing Core (With Compact Text & Copy Buttons)
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
     display_id = f"{target_id} ({extra_id})" if extra_id else target_id
@@ -263,38 +263,38 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         systems = {"mlbb": "Moonton Live Link", "ff": "Garena Core Database", "pubg": "Tencent Live Core", "coc": "Supercell Live Core"}
         id_labels = {"mlbb": "User ID & Zone", "ff": "Player UID", "pubg": "Character ID", "coc": "Player Tag"}
         
+        # 📋 UI အပေါ်ပိုင်းစာသားကိုလည်း ကျစ်လျစ်သပ်ရပ်အောင် ပြောင်းလဲခြင်း
         cool_ui = (
             f"👑 **{titles[game_type]}** 👑\n"
             f"🧬 System: {systems[game_type]}\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👤 **Player Name :** `{nickname}`\n"
-            f"🌐 **Region / Country :** `{pretty_region}`\n"
+            f"👤 **Name :** `{nickname}`\n"
+            f"🌐 **Region :** `{pretty_region}`\n"
             f"🆔 **{id_labels[game_type]} :** `{display_id}`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📋 **Tap below buttons to copy details:**"
+            f"📋 **Tap to copy:**"
         )
         
-        # 📲 အလိုအလျောက် Copy ကူးစေမည့် Inline Buttons များ ဖန်တီးခြင်း
+        # 📲 IMG_20260619_191020_964_2.jpg ထဲကလို သေးသေးလေးနဲ့ သပ်ရပ်မယ့် Inline Buttons များ ဖန်တီးခြင်း
         copy_markup = InlineKeyboardMarkup()
         
-        # Name ကို Copy ကူးမည့် Button
+        # 📋 စာသားမပါဘဲ Value သီးသန့်ပြမယ့် သေးသေးလေးလှလှလေး Button ပုံစံ
         btn_copy_name = InlineKeyboardButton(
-            text=f"📋 Copy Name: {nickname}",
+            text=f"📋 {nickname}",
             switch_inline_query_current_chat=str(nickname)
         )
-        # ID ကို Copy ကူးမည့် Button
         btn_copy_id = InlineKeyboardButton(
-            text=f"🆔 Copy ID: {target_id}",
+            text=f"📋 {target_id}",
             switch_inline_query_current_chat=str(target_id)
         )
         
         copy_markup.row(btn_copy_name)
         copy_markup.row(btn_copy_id)
         
-        # Zone ID ရှိလျှင် Zone ID အတွက်ပါ Button သီးသန့်ထည့်ပေးခြင်း
+        # Zone ID ရှိပါက ၎င်းအတွက်ပါ သီးသန့် Button ထပ်ထည့်ပေးခြင်း
         if extra_id:
             btn_copy_zone = InlineKeyboardButton(
-                text=f"🌐 Copy Zone: {extra_id}",
+                text=f"📋 {extra_id}",
                 switch_inline_query_current_chat=str(extra_id)
             )
             copy_markup.row(btn_copy_zone)

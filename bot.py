@@ -2,7 +2,7 @@ import os
 import sys
 import re
 import time
-import base64
+import hashlib
 import threading
 import requests
 import telebot
@@ -16,7 +16,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "PayX-MM Multi-Game & Gemini AI Payment Checker is Online!"
+    return "PayX-MM Multi-Game & Slip Duplicate Checker is Online!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8000))
@@ -28,11 +28,27 @@ def run_flask():
 BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
 RAPIDAPI_KEY = "06b1562a59msh39810b847e9d0e2p151fd6jsn3a9d60ae50a9"
 
-# 🔑 ကိုကို့ရဲ့ Key အမှန်
-GEMINI_API_KEY = "AQ.Ab8RN6JfFCYCkroYojWX_EV4X9I4q99xfnxgie6JrW8YQuIAJQ"
-
 bot = telebot.TeleBot(BOT_TOKEN)
 BRANDING = "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
+
+# 💾 ဖြတ်ပိုင်းပုံတွေရဲ့ Hash ကို သိမ်းဆည်းမယ့် Local File Path
+HASH_FILE = "processed_slips.txt"
+
+def load_hashes():
+    """ Bot စတက်ချိန်တွင် သိမ်းထားသော ပုံများ၏ Hash များကို ပြန်ဖတ်ခြင်း """
+    if not os.path.exists(HASH_FILE):
+        return set()
+    with open(HASH_FILE, "r") as f:
+        return set(line.strip() for line in f if line.strip())
+
+def save_hash(img_hash):
+    """ ပုံအသစ်ဝင်လာတိုင်း Hash ကို ဖိုင်ထဲသို့ အပိုင်သိမ်းခြင်း """
+    PROCESSED_SLIPS.add(img_hash)
+    with open(HASH_FILE, "a") as f:
+        f.write(f"{img_hash}\n")
+
+# Memory ထဲသို့ ဒေတာများ ကြိုတင်တင်ထားခြင်း
+PROCESSED_SLIPS = load_hashes()
 
 # Country/Region Mapping
 COUNTRY_MAP = {
@@ -100,7 +116,7 @@ def run_start_intro_animation(chat_id, initial_msg_id):
             time.sleep(0.25)
         except Exception: pass
     time.sleep(0.6)
-    erase_steps = ["⏳ 𝑷𝒂𝒚𝑿-𝑴...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿...", "⏳ 𝑷𝒂𝒚...", "⏳ 𝑷...", "⏳ System Loading..."]
+    erase_steps = ["⏳ 𝑷𝒂𝒚𝑿-𝑴...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿...", "⏳ 𝑷𝒂... ", "⏳ 𝑷...", "⏳ System Loading..."]
     for step in erase_steps:
         try:
             bot.edit_message_text(f"`{step}`", chat_id, initial_msg_id, parse_mode="Markdown")
@@ -109,17 +125,17 @@ def run_start_intro_animation(chat_id, initial_msg_id):
 
     time.sleep(0.3)
     guide = (
-        "⚔️ **PREMIUM AUTOMATION ID & AI SLIP CHECKER** ⚔️\n"
+        "⚔️ **PREMIUM AUTOMATION ID & SLIP DUPLICATE CHECKER** ⚔️\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Welcome! Select your target platform to check ID or upload any receipt:\n\n"
-        "💡 *Tip: You can directly upload ANY KPay or WavePay slip photo. Our Gemini AI will automatically read the data and detect fake edits!*"
+        "Welcome! Select your target platform to check ID or upload your receipt:\n\n"
+        "💡 *Tip: You can send a KPay/WavePay slip photo here. The bot will automatically alert if this image has been used or sent before!*"
     )
     markup = InlineKeyboardMarkup()
     btn_ml = InlineKeyboardButton("🎮 Mobile Legends", callback_data="info_ml")
     btn_ff = InlineKeyboardButton("🔥 Free Fire", callback_data="info_ff")
     btn_pubg = InlineKeyboardButton("🔫 PUBG Mobile", callback_data="info_pubg")
     btn_coc = InlineKeyboardButton("🏰 Clash of Clans", callback_data="info_coc")
-    btn_slip = InlineKeyboardButton("📸 Verify Any Slip (KPay/Wave)", callback_data="info_slip")
+    btn_slip = InlineKeyboardButton("📸 Check Duplicate Slip", callback_data="info_slip")
     btn_brand = InlineKeyboardButton("⚡ [  𝑷𝒂𝒚𝑿-𝑴𝑴  ] ⚡", callback_data="brand_click")
     
     markup.row(btn_ml, btn_ff)
@@ -156,56 +172,6 @@ def call_game_api(game_type, target_id):
     except Exception as e: return None, str(e)
 
 # =====================================================================
-# 🧠 GEMINI AI VISION RECEIPT AUDITOR ENGINE (Fixed 401 Auth)
-# =====================================================================
-def call_gemini_vision_api(image_bytes):
-    # 🌟 FIX: API Key ကို Header မှာမထည့်ဘဲ URL Parameter ?key= အဖြစ် ပြောင်းလဲတွဲပေးလိုက်ပါတယ်
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-    
-    prompt = (
-        "You are an expert financial receipt auditor for Myanmar Mobile Wallets (KBZPay and WavePay). "
-        "Analyze this image carefully. Extract and output the following details in beautiful Myanmar language Markdown format: "
-        "1. Wallet Type (KBZPay or WavePay or Unknown) "
-        "2. Transaction ID / Ref No "
-        "3. Amount (with Ks/MMK) "
-        "4. Date & Time "
-        "5. Sender & Receiver Name/Phone "
-        "6. Authenticity Status: Carefully check if fonts, alignment, or background details look Photoshopped, fake, or edited. "
-        "Make it look premium, neat, and clean for a Telegram bot response."
-    )
-    
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt},
-                    {
-                        "inlineData": {
-                            "mime_type": "image/jpeg",
-                            "data": base64_image
-                        }
-                    }
-                ]
-            }
-        ]
-    }
-    
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=25)
-        if response.status_code == 200:
-            res_json = response.json()
-            return res_json['candidates'][0]['content']['parts'][0]['text']
-        else:
-            return f"❌ API Error (Status: {response.status_code})\nတုံ့ပြန်မှု- {response.text}"
-    except Exception as e:
-        return f"❌ Gemini Core Error: {str(e)}"
-
-# =====================================================================
 # Telegram Message Handlers
 # =====================================================================
 
@@ -226,32 +192,49 @@ def callback_game_info(call):
     elif call.data == "info_coc":
         bot.send_message(call.message.chat.id, "🏰 **CLASH OF CLANS QUERY**\n\nFormat:\n`/coc [Player_Tag]`\n\n💡 **Example:**\n`/coc 20C0RVGL`", parse_mode="Markdown")
     elif call.data == "info_slip":
-        bot.send_message(call.message.chat.id, "📸 **AI SLIP VERIFICATION**\n\nစစ်ဆေးလိုသော KBZPay သို့မဟုတ် WavePay ပြေစာ (ရိုးရိုးဖြတ်ပိုင်းဖြစ်စေ၊ QR ပါသည်ဖြစ်စေ) ဓာတ်ပုံကို ပို့ပေးပါ။ Gemini AI မှ စကင်ဖတ်စစ်ဆေးပေးပါမည်။", parse_mode="Markdown")
+        bot.send_message(call.message.chat.id, "📸 **DUPLICATE SLIP DETECTOR**\n\nစစ်ဆေးလိုသော ဖြတ်ပိုင်းဓာတ်ပုံကို ပို့ပေးပါ။ စနစ်ထဲတွင် အသုံးပြုပြီးသား ပုံဟောင်းဖြစ်ပါက Bot မှ အလိုအလျောက် သတိပေးတားဆီးပေးပါမည်။", parse_mode="Markdown")
     elif call.data == "brand_click":
-        bot.send_message(call.message.chat.id, f"🚀 **{BRANDING} Identity & Multimodal AI Core v6.0**")
+        bot.send_message(call.message.chat.id, f"🚀 **{BRANDING} Identity & Slip Persistent Core v6.5**")
 
+# 📸 ဓာတ်ပုံဝင်လာလျှင် ပုံဟောင်း/ပုံသစ် ခွဲခြားသတိပေးမည့်အပိုင်း
 @bot.message_handler(content_types=['photo'])
 def handle_slip_verification(message):
-    status_msg = bot.reply_to(message, "🧠 *PayX AI Core is analyzing your slip image via Gemini...*", parse_mode="Markdown")
-    
     try:
+        # Quality အမြင့်ဆုံး ဓာတ်ပုံဒေတာကို ဆွဲယူခြင်း
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # Gemini Vision သို့ ပို့၍ စစ်ဆေးခြင်း
-        ai_analysis = call_gemini_vision_api(downloaded_file)
+        # ဓာတ်ပုံဖိုင်တစ်ခုလုံး၏ MD5 Hash ကို တွက်ထုတ်ခြင်း
+        img_hash = hashlib.md5(downloaded_file).hexdigest()
         
-        ui_response = (
-            f"📸 **{BRANDING} AI SLIP AUDIT RESULT**\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{ai_analysis}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "⚠️ *Disclaimer: AI analysis is based on image OCR. Always double-check your actual bank history!*"
-        )
-        bot.edit_message_text(ui_response, message.chat.id, status_msg.message_id)
-        
+        # Hash ဖိုင်ထဲတွင် ရှိမရှိ စစ်ဆေးခြင်း
+        if img_hash in PROCESSED_SLIPS:
+            # 🚨 ပုံဟောင်းထပ်လာပို့လျှင် ပြတ်သားစွာ သတိပေးခြင်း
+            ui_response = (
+                f"🚨 **{BRANDING} SLIP SECURITY ALERT** 🚨\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "❌ **ဒီဖြတ်ပိုင်းပုံက စနစ်ထဲမှာ အသုံးပြုပြီးသား ဖြစ်နေပါတယ်ဗျာ။**\n"
+                "ပုံဟောင်း/ပုံတူကို ထပ်မံပေးပို့ပြီး လိမ်လည်ရန် ကြိုးပမ်းနေခြင်း ဖြစ်နိုင်ပါသည်။\n\n"
+                "⚠️ *Warning: Duplicate submission detected! Please upload a newly generated transaction slip.*"
+                "\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🛡️ Security Engine: {BRANDING}"
+            )
+            bot.reply_to(message, ui_response, parse_mode="Markdown")
+        else:
+            # ✅ ပုံအသစ်ဖြစ်လျှင် Local File ထဲရော Memory ထဲပါ တန်းသိမ်းဆည်းခြင်း
+            save_hash(img_hash)
+            ui_response = (
+                f"✅ **{BRANDING} SLIP CHECK SUCCESS**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "💚 **ဖြတ်ပိုင်းအသစ် ဖြစ်ကြောင်း အတည်ပြုပြီးပါပြီ။**\n"
+                "ဒီပုံကို ပထမဆုံးအကြိမ် ပေးပို့ခြင်းဖြစ်ပြီး စနစ်ထဲတွင် ယခင်က အသုံးပြုထားခြင်း မရှိသေးပါ။\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚙️ Slip Token: `{img_hash[:12]}`"
+            )
+            bot.reply_to(message, ui_response, parse_mode="Markdown")
+            
     except Exception as e:
-        bot.edit_message_text(f"❌ **Error:** `{str(e)}`", message.chat.id, status_msg.message_id, parse_mode="Markdown")
+        bot.reply_to(message, f"❌ **System Error:** `{str(e)}`", parse_mode="Markdown")
 
 # =====================================================================
 # Game ID Processing Core

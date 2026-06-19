@@ -434,7 +434,7 @@ def handle_ml(message):
 def handle_ff(message):
     args = message.text.split()
     if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /ff [UID]")
-    parse_and_send_result(message, "ff, args[1])
+    parse_and_send_result(message, "ff", args[1])
 
 @bot.message_handler(commands=['pubg'])
 def handle_pubg(message):

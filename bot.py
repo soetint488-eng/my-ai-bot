@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 
 # --- Configuration ---
 BOT_TOKEN = "8702294693:AAGF_mmGKAg7-mWBuAl34jevVtDJ0mZE8HU"
-ADMIN_ID = 7308292609  # <--- သင့်ရဲ့ Telegram User ID ကို ဒီမှာ အရင်ပြောင်းပါ
+ADMIN_ID = 8584422107  # <--- သင့်ရဲ့ Telegram User ID ကို ဒီမှာ အရင်ပြောင်းပါ
 
 # Whitelist လုပ်ထားသော User များ (Admin ကို အလိုအလျောက် ထည့်ထားသည်)
 whitelisted_users = {ADMIN_ID}

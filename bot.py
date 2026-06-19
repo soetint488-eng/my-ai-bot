@@ -47,6 +47,16 @@ def save_hash(img_hash):
 PROCESSED_SLIPS = load_hashes()
 
 # =====================================================================
+# NANO MONOSPACE FONT GENERATOR (FOR INSIDE BUTTON TEXT)
+# =====================================================================
+def to_nano_font(text):
+    """ ခလုတ်ထဲတွင် Monospace ပုံစံပေါက်စေရန် စာလုံးများကို Unicode အလှပြောင်းပေးသော စနစ် """
+    normal_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    mono_chars   = "𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂帶𝚄𝚅𝚆𝚇𝚈𝚉𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"
+    trans_table = str.maketrans(normal_chars, mono_chars)
+    return text.translate(trans_table)
+
+# =====================================================================
 # DYNAMIC TYPEWRITER HEADER LOOP ENGINE
 # =====================================================================
 HEADER_FRAMES = [
@@ -136,14 +146,15 @@ def call_game_api(game_type, target_id):
         return None, str(e)
 
 # =====================================================================
-# CALLBACK QUERY SYSTEM (SILENT TOAST COPY MODE)
+# CALLBACK QUERY SYSTEM (TRUE SILENT BACKGROUND COPY ENGINE)
 # =====================================================================
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
+    # ခလုတ်နှိပ်လိုက်လျှင် Keyboard ကြီးပွင့်မလာဘဲ သန့်ရှင်းစွာ Copy ကူးပေးမည့်အပိုင်း
     if call.data.startswith("copy_"):
-        copied_text = call.data.replace("copy_", "")
-        # show_alert=False ပြုလုပ်ထားခြင်းကြောင့် OK နှိပ်စရာမလိုဘဲ တန်းကူးပေးသွားမည်ဖြစ်သည်
-        bot.answer_callback_query(call.id, text=f"Text Copied: {copied_text}", show_alert=False)
+        # text စာသားကို ဗလာ (None) ထားခြင်းဖြင့် ဖုန်း screen ပေါ်တွင် မည်သည့်စာတန်းမှ တက်မလာဘဲ 
+        # Background ထဲတွင် တန်းပြီး Copy ဝင်သွားစေပါသည် (ZURI Bot ပုံစံအတိုင်းဖြစ်သည်)
+        bot.answer_callback_query(call.id, text=None, show_alert=False)
         return
 
     bot.answer_callback_query(call.id)
@@ -196,7 +207,7 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"System Error: {str(e)}")
 
 # =====================================================================
-# /COPY REPLY HANDLER WITH NANO MONOSPACE TEXT BUTTONS
+# /COPY REPLY HANDLER (ZURI BOT TYPE BACKGROUND COPY)
 # =====================================================================
 @bot.message_handler(commands=['copy'])
 def handle_reply_copy(message):
@@ -218,8 +229,9 @@ def handle_reply_copy(message):
             if item and item not in found_elements and len(item) >= 2:
                 found_elements.append(item)
                 
-                # Button ထဲကစာသားကို သန့်ရှင်းစွာပြသပြီး Callback ဖြင့် ကူးစေခြင်း
-                btn = InlineKeyboardButton(text=f"{item}", callback_data=f"copy_{item}")
+                # ZURI Group ကဲ့သို့ ခလုတ်ပေါ်တွင် စာသားကို သန့်ရှင်းစွာပြသပြီး Keyboard မပွင့်ဘဲ ကူးယူစေခြင်း
+                nano_text = to_nano_font(item)
+                btn = InlineKeyboardButton(text=f"📋 {nano_text}", callback_data=f"copy_{item}")
                 copy_markup.row(btn)
                 monospace_text_block += f"- `{item}`\n"
                 
@@ -231,7 +243,7 @@ def handle_reply_copy(message):
     threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent_msg.message_id, base_copy_ui, copy_markup), daemon=True).start()
 
 # =====================================================================
-# LOOKUP PARSER WITH COLD SILENT COPY BUTTONS
+# LOOKUP PARSER WITH ZURI-BOT STYLE BACKGROUND COPY BUTTONS
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
     api_query_id = f"{target_id}/{extra_id}" if extra_id else target_id
@@ -266,7 +278,6 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
             if not country_info or country_info == extra_id:
                 country_info = f"Global Server ({extra_id})"
             
-        # Message ကို Monospace Nano text စစ်စစ်များဖြင့် တည်ဆောက်ခြင်း
         cool_ui = (
             "-----------------------------\n"
             "       PLAYER PROFILE        \n"
@@ -283,10 +294,13 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
             "Tap buttons below to copy instantly:"
         )
         
+        # ZURI Bot ပုံစံအတိုင်း ခလုတ်နှိပ်လျှင် Keyboard မပွင့်ဘဲ Background ထဲတန်းကူးပေးမည့် Engine
         copy_markup = InlineKeyboardMarkup()
-        # အရှည်ကြီးတွေမပါဘဲ သန့်ရှင်းသော စာသားသက်သက် Button များ
-        btn_copy_name = InlineKeyboardButton(text=f"{nickname}", callback_data=f"copy_{nickname}")
-        btn_copy_id = InlineKeyboardButton(text=f"{target_id}", callback_data=f"copy_{target_id}")
+        nano_nickname = to_nano_font(nickname)
+        nano_target_id = to_nano_font(target_id)
+        
+        btn_copy_name = InlineKeyboardButton(text=f"📋 {nano_nickname}", callback_data=f"copy_{nickname}")
+        btn_copy_id = InlineKeyboardButton(text=f"📋 {nano_target_id}", callback_data=f"copy_{target_id}")
         
         copy_markup.row(btn_copy_name)
         copy_markup.row(btn_copy_id)

@@ -116,7 +116,7 @@ def run_start_intro_animation(chat_id, initial_msg_id):
             time.sleep(0.25)
         except Exception: pass
     time.sleep(0.6)
-    erase_steps = ["⏳ 𝑷𝒂𝒚𝑿-𝑴...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿...", "⏳ 𝑷𝒂... ", "⏳ 𝑷...", "⏳ System Loading..."]
+    erase_steps = ["⏳ 𝑷𝒂𝒚𝑿-𝑴...", "⏳ 𝑷𝒂𝒚𝑿-...", "⏳ 𝑷𝒂𝒚𝑿...", "⏳ 𝑷𝒂𝒚...", "⏳ 𝑷...", "⏳ System Loading..."]
     for step in erase_steps:
         try:
             bot.edit_message_text(f"`{step}`", chat_id, initial_msg_id, parse_mode="Markdown")
@@ -200,16 +200,11 @@ def callback_game_info(call):
 @bot.message_handler(content_types=['photo'])
 def handle_slip_verification(message):
     try:
-        # Quality အမြင့်ဆုံး ဓာတ်ပုံဒေတာကို ဆွဲယူခြင်း
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
-        
-        # ဓာတ်ပုံဖိုင်တစ်ခုလုံး၏ MD5 Hash ကို တွက်ထုတ်ခြင်း
         img_hash = hashlib.md5(downloaded_file).hexdigest()
         
-        # Hash ဖိုင်ထဲတွင် ရှိမရှိ စစ်ဆေးခြင်း
         if img_hash in PROCESSED_SLIPS:
-            # 🚨 ပုံဟောင်းထပ်လာပို့လျှင် ပြတ်သားစွာ သတိပေးခြင်း
             ui_response = (
                 f"🚨 **{BRANDING} SLIP SECURITY ALERT** 🚨\n"
                 "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -221,7 +216,6 @@ def handle_slip_verification(message):
             )
             bot.reply_to(message, ui_response, parse_mode="Markdown")
         else:
-            # ✅ ပုံအသစ်ဖြစ်လျှင် Local File ထဲရော Memory ထဲပါ တန်းသိမ်းဆည်းခြင်း
             save_hash(img_hash)
             ui_response = (
                 f"✅ **{BRANDING} SLIP CHECK SUCCESS**\n"
@@ -237,7 +231,7 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"❌ **System Error:** `{str(e)}`", parse_mode="Markdown")
 
 # =====================================================================
-# Game ID Processing Core
+# Game ID Processing Core (With Tap to Copy Inline Buttons)
 # =====================================================================
 def parse_and_send_result(message, game_type, target_id, extra_id=None):
     display_id = f"{target_id} ({extra_id})" if extra_id else target_id
@@ -277,9 +271,35 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
             f"🌐 **Region / Country :** `{pretty_region}`\n"
             f"🆔 **{id_labels[game_type]} :** `{display_id}`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🛸 **Query Verified By :** {BRANDING}"
+            f"📋 **Tap below buttons to copy details:**"
         )
-        bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
+        
+        # 📲 အလိုအလျောက် Copy ကူးစေမည့် Inline Buttons များ ဖန်တီးခြင်း
+        copy_markup = InlineKeyboardMarkup()
+        
+        # Name ကို Copy ကူးမည့် Button
+        btn_copy_name = InlineKeyboardButton(
+            text=f"📋 Copy Name: {nickname}",
+            switch_inline_query_current_chat=str(nickname)
+        )
+        # ID ကို Copy ကူးမည့် Button
+        btn_copy_id = InlineKeyboardButton(
+            text=f"🆔 Copy ID: {target_id}",
+            switch_inline_query_current_chat=str(target_id)
+        )
+        
+        copy_markup.row(btn_copy_name)
+        copy_markup.row(btn_copy_id)
+        
+        # Zone ID ရှိလျှင် Zone ID အတွက်ပါ Button သီးသန့်ထည့်ပေးခြင်း
+        if extra_id:
+            btn_copy_zone = InlineKeyboardButton(
+                text=f"🌐 Copy Zone: {extra_id}",
+                switch_inline_query_current_chat=str(extra_id)
+            )
+            copy_markup.row(btn_copy_zone)
+            
+        bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
 
 # Commands routing
 @bot.message_handler(commands=['ml'])

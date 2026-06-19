@@ -29,10 +29,9 @@ RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Moving text & Static dynamic branding text
 BRANDING = "✨ 𝑷𝒂𝒚𝑿-𝑴𝑴 💫"
 
-# 🌍 Country Code များကို အလန်းစား Flag + အမည်အပြည့်စုံသို့ ပြောင်းပေးမည့် Map
+# 🌍 Country Code Mapping
 COUNTRY_MAP = {
     "mm": "🇲🇲 Myanmar", "myanmar": "🇲🇲 Myanmar", "burma": "🇲🇲 Myanmar",
     "id": "🇮🇩 Indonesia", "indonesia": "🇮🇩 Indonesia",
@@ -73,10 +72,10 @@ def check_ff_id(player_id):
     except Exception as e: return None, str(e)
 
 # =====================================================================
-# Bot Handlers & UI (telebot စနစ်)
+# Bot Handlers & UI (Fixed Callback System)
 # =====================================================================
 
-# 1. /start command with Inline Buttons
+# 1. /start command
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     guide = (
@@ -85,16 +84,15 @@ def send_welcome(message):
         f"⏳ __System active via {BRANDING}__"
     )
     
-    # Inline Buttons ဖန်တီးခြင်း
     markup = InlineKeyboardMarkup()
     btn_ml = InlineKeyboardButton("Mobile Legends 🎮", callback_data="info_ml")
     btn_ff = InlineKeyboardButton("Garena Free Fire 🔥", callback_data="info_ff")
     markup.row(btn_ml, btn_ff)
     
-    bot.reply_to(message, guide, parse_mode="Markdown", reply_markup=markup)
+    bot.send_message(message.chat.id, guide, parse_mode="Markdown", reply_markup=markup)
 
-# Button ကလစ်နှိပ်မှုများကို တုံ့ပြန်ခြင်း
-@bot.callback_query_handler(func=lambda call: call.data in ["info_ml", "info_ff"])
+# 🛠️ ပြင်ဆင်ပြီးသား ခလုတ်နှိပ်မှု လက်ခံပေးမည့်အပိုင်း (Callback Handler Fix)
+@bot.callback_query_handler(func=lambda call: True)
 def callback_game_info(call):
     if call.data == "info_ml":
         text = (
@@ -104,6 +102,9 @@ def callback_game_info(call):
             "💡 **Example:**\n"
             "`/ml 2112723799 (19915)`"
         )
+        bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
+        bot.answer_callback_query(call.id)
+        
     elif call.data == "info_ff":
         text = (
             "🔥 **FREE FIRE CHECKER**\n\n"
@@ -112,13 +113,12 @@ def callback_game_info(call):
             "💡 **Example:**\n"
             "`/ff 182200303107200135203`"
         )
-    bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
-    bot.answer_callback_query(call.id)
+        bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
+        bot.answer_callback_query(call.id)
 
-# 2. /ml Command Handler with Bracket Regex Format
+# 2. /ml Command Handler
 @bot.message_handler(commands=['ml'])
 def handle_ml_check(message):
-    # Regex သုံးပြီး '2112723799 (19915)' ပုံစံကို ဖမ်းယူခြင်း
     match = re.search(r'/ml\s+(\d+)\s*\((.*?)\)', message.text)
     
     if not match:
@@ -135,7 +135,6 @@ def handle_ml_check(message):
     zone_id = match.group(2).strip()
     
     status_msg = bot.reply_to(message, "⏳ *Extracting keys and connecting to Moonton...*", parse_mode="Markdown")
-    
     result, error = check_mlbb_id(user_id, zone_id)
     
     if error:
@@ -146,7 +145,6 @@ def handle_ml_check(message):
         nickname = result.get("nickname") or result.get("username") or result.get("name") or "Hidden / Not Found"
         raw_region = result.get("region") or result.get("country") or result.get("zone_name") or ""
         
-        # 🇲🇲 နိုင်ငံအမည်ကို အရှည်ကောက် ပြောင်းလဲခြင်း
         pretty_region = get_pretty_country(raw_region)
             
         cool_ui = (
@@ -161,7 +159,7 @@ def handle_ml_check(message):
         )
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown")
 
-# 3. /ff Command Handler (Garena Free Fire)
+# 3. /ff Command Handler
 @bot.message_handler(commands=['ff'])
 def handle_ff_check(message):
     args = message.text.split()
@@ -172,7 +170,6 @@ def handle_ff_check(message):
         
     player_id = args[1]
     status_msg = bot.reply_to(message, "⏳ *Scanning Garena Free Fire Data...*", parse_mode="Markdown")
-    
     result, error = check_ff_id(player_id)
     
     if error:
@@ -197,5 +194,5 @@ def handle_ff_check(message):
 # =====================================================================
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    print("Multi-Game Telebot Server is Live...")
+    print("Multi-Game Telebot Server is Live with Button Fix...")
     bot.infinity_polling()

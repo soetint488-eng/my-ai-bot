@@ -399,7 +399,7 @@ def explicit_commands_router(message):
         process_and_build_ui(message, "pubg", args_text)
     elif cmd == 'Hok':
         process_and_build_ui(message, "honor-of-kings", args_text)
-        elif cmd == 'Bl':
+    elif  cmd == 'Bl':
         process_and_build_ui(message, "blood-strike", args_text)
 
 # =====================================================================

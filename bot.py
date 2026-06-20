@@ -76,13 +76,11 @@ def get_dynamic_keyboard(user_id):
 def get_game_check_panel(user_id):
     markup = InlineKeyboardMarkup()
     if user_id in ADMINS:
-        # Admin ဆိုရင် အားလုံး ပွင့်မည်
         markup.row(InlineKeyboardButton("🟢 Mobile Legends", callback_data="chk_mlbb"), InlineKeyboardButton("🟢 Magic Chess Go Go", callback_data="chk_mcgg"))
         markup.row(InlineKeyboardButton("🟢 Honor of Kings", callback_data="chk_hok"), InlineKeyboardButton("🟢 Blood Strike", callback_data="chk_bs"))
         markup.row(InlineKeyboardButton("🟢 Clash of Clans", callback_data="chk_coc"))
         markup.row(InlineKeyboardButton("🟢 Free Fire", callback_data="chk_ff"), InlineKeyboardButton("🟢 PUBG Mobile", callback_data="chk_pubg"))
     else:
-        # Free User ဆိုရင် MLBB နဲ့ MCGG ပွင့်ပြီး ကျန်တာ Lock ကျနေမည်
         markup.row(InlineKeyboardButton("🟢 Mobile Legends Verification", callback_data="chk_mlbb"))
         markup.row(InlineKeyboardButton("🟢 Magic Chess Go Go (MCGG)", callback_data="chk_mcgg"))
         markup.row(InlineKeyboardButton("🔒 Honor of Kings (Locked)", callback_data="game_locked"))
@@ -100,8 +98,14 @@ def handle_start_command(message):
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"Hi {message.from_user.first_name or 'User'},\n"
         f"I am fully ready to parse and fetch your game profiles instantly!\n\n"
-        f"Input Format: Send game data directly (e.g., `2112723799 (19915)`)\n"
-        f"System auto-detected your role access matrix panel below."
+        f"Input Format: Send game data directly or use Commands:\n"
+        f"🔹 MLBB: `/ml 2112723799 (19915)`\n"
+        f"🔹 MCGG: `/Go 9108333 (4075)`\n"
+        f"🔹 Free Fire: `/ff 3108721457`\n"
+        f"🔹 COC: `/cc #20C0RVGL`\n"
+        f"🔹 PUBG: `/Pg 5204837417`\n"
+        f"🔹 HOK: `/Hok 17960996468644334037`\n"
+        f"🔹 Blood Strike: `/Bl 586016075134`"
     )
     bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown", reply_markup=get_dynamic_keyboard(user_id))
 
@@ -116,7 +120,6 @@ def generate_free_access_key(message):
     if user_id in BANNED_KEYS:
         return bot.reply_to(message, "Access Denied: Your key generation privileges have been suspended by admin.", parse_mode="Markdown")
         
-    # Check 3-Hours Time Cooldown Limitation
     if user_id in USER_KEYS:
         last_generated = USER_KEYS[user_id]["generated_at"]
         elapsed_time = current_time - last_generated
@@ -133,7 +136,6 @@ def generate_free_access_key(message):
                 reply_markup=get_game_check_panel(user_id)
             )
 
-    # Generate MD5 Token Array
     raw_token = f"PAYX-{user_id}-{current_time}"
     generated_key = "PX-" + hashlib.md5(raw_token.encode()).hexdigest()[:12].upper()
     
@@ -156,7 +158,6 @@ def generate_free_access_key(message):
     )
     bot.reply_to(message, success_msg, parse_mode="Markdown", reply_markup=get_game_check_panel(user_id))
     
-    # Admin Log Monitor Notification
     admin_alert = (
         f"NEW KEY ISSUED\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -207,13 +208,13 @@ def callback_processor(call):
 
     if call.data.startswith("chk_"):
         game_map = {
-            "chk_mlbb": ("MOBILE LEGENDS", "Format: 2112723799 (19915)"),
-            "chk_mcgg": ("MAGIC CHESS GO GO", "Format: 9108333 (4075)"),
-            "chk_coc": ("CLASH OF CLANS", "Format: #20C0RVGL"),
-            "chk_ff": ("FREE FIRE", "Format: 3108721457"),
-            "chk_pubg": ("PUBG MOBILE", "Format: 5204837417"),
-            "chk_hok": ("HONOR OF KINGS", "Format: 17960996468644334037"),
-            "chk_bs": ("BLOOD STRIKE", "Format: 586016075134")
+            "chk_mlbb": ("MOBILE LEGENDS", "Format: /ml 2112723799 (19915)"),
+            "chk_mcgg": ("MAGIC CHESS GO GO", "Format: /Go 9108333 (4075)"),
+            "chk_coc": ("CLASH OF CLANS", "Format: /cc #20C0RVGL"),
+            "chk_ff": ("FREE FIRE", "Format: /ff 3108721457"),
+            "chk_pubg": ("PUBG MOBILE", "Format: /Pg 5204837417"),
+            "chk_hok": ("HONOR OF KINGS", "Format: /Hok 17960996468644334037"),
+            "chk_bs": ("BLOOD STRIKE", "Format: /Bl 586016075134")
         }
         name, fmt = game_map.get(call.data, ("GAME", ""))
         bot.answer_callback_query(call.id, f"📝 {name} Enabled\n{fmt}", show_alert=True)
@@ -258,7 +259,7 @@ def process_unban_action(message):
         bot.reply_to(message, "Invalid syntax. Please output numerical profile IDs only.")
 
 # =====================================================================
-# MULTI-GAME ROUTER & REGION PARSER (UPDATED)
+# MULTI-GAME ROUTER & REGION PARSER
 # =====================================================================
 def call_game_api(game_type, main_id, extra_id=None):
     headers = {
@@ -276,7 +277,6 @@ def call_game_api(game_type, main_id, extra_id=None):
     elif game_type == "pubg":
         url = f"https://{RAPIDAPI_HOST}/pubgm-global/{main_id}"
     elif game_type == "coc":
-        # Coc API tag parsing
         clean_tag = main_id.replace("#", "")
         url = f"https://{RAPIDAPI_HOST}/coc/{clean_tag}"
     elif game_type == "honor-of-kings":
@@ -311,7 +311,6 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
         bot.reply_to(message, "Access Blocked: You need an active key to parse data frames.\nClick button below to purchase or generate key from dashboard.", parse_mode="Markdown", reply_markup=buy_markup)
         return
 
-    # Free user ကန့်သတ်ချက် (MLBB နှင့် MCGG သာ ခွင့်ပြုမည်)
     FREE_GAMES = ["mlbb", "mcgg"]
     if user_id not in ADMINS and game_type not in FREE_GAMES:
         buy_markup = InlineKeyboardMarkup()
@@ -376,7 +375,47 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
     except Exception: pass
 
 # =====================================================================
-# TEXT LOOKUP LISTENER & ROUTER
+# 🕹 EXPLICIT COMMANDS LISTENERS
+# =====================================================================
+@bot.message_handler(commands=['ml', 'Go', 'ff', 'cc', 'Pg', 'Hok', 'Bl'])
+def explicit_commands_router(message):
+    cmd = message.text.split()[0][1:]  # / ကိုဖယ်ပြီး command နာမည်ယူခြင်း
+    args_text = message.text[len(cmd)+2:].strip() # Command ရဲ့နောက်က parameter များကို ယူခြင်း
+    
+    if not args_text:
+        return bot.reply_to(message, f"Usage format missing. Send data after /{cmd}", parse_mode="Markdown")
+
+    if cmd == 'ml':
+        match = re.search(r'^(\d+)\s*[\(\[]\s*(\d+)\s*[\)\]]$', args_text)
+        if match: process_and_build_ui(message, "mlbb", match.group(1), match.group(2))
+        else: bot.reply_to(message, "Format: `/ml 2112723799 (19915)`", parse_mode="Markdown")
+        
+    elif cmd == 'Go':
+        match = re.search(r'^(\d+)\s*[\(\[]\s*(\d+)\s*[\)\]]$', args_text)
+        if match: process_and_build_ui(message, "mcgg", match.group(1), match.group(2))
+        else: bot.reply_to(message, "Format: `/Go 9108333 (4075)`", parse_mode="Markdown")
+        
+    elif cmd == 'ff':
+        if args_text.isdigit(): process_and_build_ui(message, "ff", args_text)
+        else: bot.reply_to(message, "Format: `/ff 3108721457`", parse_mode="Markdown")
+        
+    elif cmd == 'cc':
+        process_and_build_ui(message, "coc", args_text.upper())
+        
+    elif cmd == 'Pg':
+        if args_text.isdigit(): process_and_build_ui(message, "pubg", args_text)
+        else: bot.reply_to(message, "Format: `/Pg 5204837417`", parse_mode="Markdown")
+        
+    elif cmd == 'Hok':
+        if args_text.isdigit(): process_and_build_ui(message, "honor-of-kings", args_text)
+        else: bot.reply_to(message, "Format: `/Hok 17960996468644334037`", parse_mode="Markdown")
+        
+    elif cmd == 'Bl':
+        if args_text.isdigit(): process_and_build_ui(message, "blood-strike", args_text)
+        else: bot.reply_to(message, "Format: `/Bl 586016075134`", parse_mode="Markdown")
+
+# =====================================================================
+# TEXT LOOKUP LISTENER & ROUTER (FOR DIRECT INPUTS)
 # =====================================================================
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def advanced_text_router(message):
@@ -384,8 +423,6 @@ def advanced_text_router(message):
     
     text_clean = message.text.strip()
     
-    # 1. MLBB သို့မဟုတ် MCGG (နှစ်ခုလုံးက ID (Zone) ပုံစံတူညီကြပါတယ်)
-    # စာသားထဲတွင် mcgg သို့မဟုတ် magic ဟုပါလျှင် MCGG အဖြစ် စစ်ပေးပြီး ပုံမှန်ဆိုလျှင် MLBB ဟု ယူဆပါမည်
     ml_match = re.search(r'^(\d+)\s*[\(\[]\s*(\d+)\s*[\)\]]$', text_clean)
     if ml_match:
         if "mcgg" in text_clean.lower() or "chess" in text_clean.lower():
@@ -394,26 +431,20 @@ def advanced_text_router(message):
             process_and_build_ui(message, "mlbb", ml_match.group(1), ml_match.group(2))
         return
 
-    # 2. Clash of Clans Tag Checker (# ပါပါ မပါပါ စစ်ဆေးပေးပါသည်)
     coc_match = re.search(r'^#?([A-Z0-9]{7,14})$', text_clean, re.IGNORECASE)
     if coc_match and not text_clean.isdigit():
         process_and_build_ui(message, "coc", coc_match.group(1).upper())
         return
 
-    # 3. ဂဏန်းသက်သက် ID များ စစ်ထုတ်ခြင်း (FF, PUBG, HOK, Blood Strike)
     if text_clean.isdigit():
         val_len = len(text_clean)
         
-        # Free Fire ID Scope (8 မှ 10 လုံး)
         if 8 <= val_len <= 10:
             process_and_build_ui(message, "ff", text_clean)
-        # Blood Strike ID Scope (၁၁ လုံး သို့မဟုတ် ၁၂ လုံး)
         elif 11 <= val_len <= 12:
             process_and_build_ui(message, "blood-strike", text_clean)
-        # PUBG Mobile ID Scope (၁၃ လုံးအထိ)
         elif val_len == 13:
             process_and_build_ui(message, "pubg", text_clean)
-        # Honor of Kings ID Scope (ဂဏန်းအရှည်ကြီး ၁၉ လုံးဝန်းကျင်)
         elif 17 <= val_len <= 20:
             process_and_build_ui(message, "honor-of-kings", text_clean)
         else:

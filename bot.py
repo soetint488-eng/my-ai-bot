@@ -76,13 +76,17 @@ def get_dynamic_keyboard(user_id):
 def get_game_check_panel(user_id):
     markup = InlineKeyboardMarkup()
     if user_id in ADMINS:
-        # Admin ဆိုရင် အားလုံး ပွင့်မယ်
-        markup.row(InlineKeyboardButton("🟢 Mobile Legends", callback_data="chk_mlbb"))
+        # Admin ဆိုရင် အားလုံး ပွင့်မည်
+        markup.row(InlineKeyboardButton("🟢 Mobile Legends", callback_data="chk_mlbb"), InlineKeyboardButton("🟢 Magic Chess Go Go", callback_data="chk_mcgg"))
+        markup.row(InlineKeyboardButton("🟢 Honor of Kings", callback_data="chk_hok"), InlineKeyboardButton("🟢 Blood Strike", callback_data="chk_bs"))
         markup.row(InlineKeyboardButton("🟢 Clash of Clans", callback_data="chk_coc"))
         markup.row(InlineKeyboardButton("🟢 Free Fire", callback_data="chk_ff"), InlineKeyboardButton("🟢 PUBG Mobile", callback_data="chk_pubg"))
     else:
-        # Free User ဆိုရင် MLBB ပဲပွင့်ပြီး ကျန်တာ Lock ကျနေမယ်
+        # Free User ဆိုရင် MLBB နဲ့ MCGG ပွင့်ပြီး ကျန်တာ Lock ကျနေမည်
         markup.row(InlineKeyboardButton("🟢 Mobile Legends Verification", callback_data="chk_mlbb"))
+        markup.row(InlineKeyboardButton("🟢 Magic Chess Go Go (MCGG)", callback_data="chk_mcgg"))
+        markup.row(InlineKeyboardButton("🔒 Honor of Kings (Locked)", callback_data="game_locked"))
+        markup.row(InlineKeyboardButton("🔒 Blood Strike (Locked)", callback_data="game_locked"))
         markup.row(InlineKeyboardButton("🔒 Clash of Clans (Locked)", callback_data="game_locked"))
         markup.row(InlineKeyboardButton("🔒 Free Fire (Locked)", callback_data="game_locked"), InlineKeyboardButton("🔒 PUBG Mobile (Locked)", callback_data="game_locked"))
     return markup
@@ -122,11 +126,6 @@ def generate_free_access_key(message):
             hours = remaining_seconds // 3600
             minutes = (remaining_seconds % 3600) // 60
             
-            buy_markup = InlineKeyboardMarkup()
-            btn_buy = InlineKeyboardButton(text="Owner Request (Buy Premium)", url="[https://t.me/PayX_MM?text=key%20ဝယ](https://t.me/PayX_MM?text=key%20ဝယ)်ချင်လို့ပါ")
-            buy_markup.add(btn_buy)
-            
-            # Cooldown ရှိနေပေမယ့် လက်ရှိ Key မကုန်သေးရင် စစ်လို့ရမည့် Button ထည့်ပေးထားပါတယ်
             return bot.send_message(
                 message.chat.id, 
                 f"🎁 *Cooldown Active*: You can generate your next free key in `{hours}h {minutes}m`.\n\nWant to bypass limitation with stable authorization?", 
@@ -150,15 +149,14 @@ def generate_free_access_key(message):
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"Key: `{generated_key}`\n"
         f"Status: Active for next 3 Hours\n"
-        f"Scope: MLBB Verification Unlocked\n"
+        f"Scope: MLBB & MCGG Unlocked\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"Tap key block to instantly copy your key.\n"
         f"Choose your gate action from the dashboard button below:"
     )
-    # Key ထုတ်ပြီးတာနဲ့ Check Buttons Panel ကို တန်းပြပေးလိုက်ပါတယ်
     bot.reply_to(message, success_msg, parse_mode="Markdown", reply_markup=get_game_check_panel(user_id))
     
-    # Admin Log Monitor Notification (Markdown Code Block ဖြင့် ပြင်ဆင်ပြီး)
+    # Admin Log Monitor Notification
     admin_alert = (
         f"NEW KEY ISSUED\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -196,7 +194,7 @@ def trigger_admin_dashboard_from_keyboard(message):
     
     bot.send_message(message.chat.id, admin_text, parse_mode="Markdown", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("adm_") or call.data in ["delete_msg", "game_locked", "chk_mlbb", "chk_coc", "chk_ff", "chk_pubg"])
+@bot.callback_query_handler(func=lambda call: call.data.startswith("adm_") or call.data in ["delete_msg", "game_locked", "chk_mlbb", "chk_coc", "chk_ff", "chk_pubg", "chk_hok", "chk_bs", "chk_mcgg"])
 def callback_processor(call):
     if call.data == "delete_msg":
         try: bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -208,8 +206,17 @@ def callback_processor(call):
         return
 
     if call.data.startswith("chk_"):
-        game_name = call.data.replace("chk_", "").upper()
-        bot.answer_callback_query(call.id, f"Direct Method Enabled: Please send {game_name} input directly to the chat context.")
+        game_map = {
+            "chk_mlbb": ("MOBILE LEGENDS", "Format: 2112723799 (19915)"),
+            "chk_mcgg": ("MAGIC CHESS GO GO", "Format: 9108333 (4075)"),
+            "chk_coc": ("CLASH OF CLANS", "Format: #20C0RVGL"),
+            "chk_ff": ("FREE FIRE", "Format: 3108721457"),
+            "chk_pubg": ("PUBG MOBILE", "Format: 5204837417"),
+            "chk_hok": ("HONOR OF KINGS", "Format: 17960996468644334037"),
+            "chk_bs": ("BLOOD STRIKE", "Format: 586016075134")
+        }
+        name, fmt = game_map.get(call.data, ("GAME", ""))
+        bot.answer_callback_query(call.id, f"📝 {name} Enabled\n{fmt}", show_alert=True)
         return
 
     if call.from_user.id not in ADMINS: return
@@ -251,7 +258,7 @@ def process_unban_action(message):
         bot.reply_to(message, "Invalid syntax. Please output numerical profile IDs only.")
 
 # =====================================================================
-# MULTI-GAME ROUTER & REGION PARSER
+# MULTI-GAME ROUTER & REGION PARSER (UPDATED)
 # =====================================================================
 def call_game_api(game_type, main_id, extra_id=None):
     headers = {
@@ -262,12 +269,22 @@ def call_game_api(game_type, main_id, extra_id=None):
     
     if game_type == "mlbb":
         url = f"https://{RAPIDAPI_HOST}/mobile-legends/{main_id}/{extra_id}"
+    elif game_type == "mcgg":
+        url = f"https://{RAPIDAPI_HOST}/mcgg/{main_id}/{extra_id}"
     elif game_type == "ff":
         url = f"https://{RAPIDAPI_HOST}/ff-global/{main_id}"
     elif game_type == "pubg":
         url = f"https://{RAPIDAPI_HOST}/pubgm-global/{main_id}"
     elif game_type == "coc":
-        url = f"https://{RAPIDAPI_HOST}/coc/{main_id}"
+        # Coc API tag parsing
+        clean_tag = main_id.replace("#", "")
+        url = f"https://{RAPIDAPI_HOST}/coc/{clean_tag}"
+    elif game_type == "honor-of-kings":
+        url = f"https://{RAPIDAPI_HOST}/honor-of-kings/{main_id}"
+    elif game_type == "blood-strike":
+        url = f"https://{RAPIDAPI_HOST}/blood-strike/{main_id}"
+    else:
+        return None
         
     try:
         r = requests.get(url, headers=headers, timeout=12)
@@ -290,27 +307,26 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
     
     if not check_user_key_validity(user_id):
         buy_markup = InlineKeyboardMarkup()
-        buy_markup.add(InlineKeyboardButton(text="Owner Request (Buy Premium)", url="[https://t.me/PayX_MM?text=key%20ဝယ](https://t.me/PayX_MM?text=key%20ဝယ)်ချင်လို့ပါ"))
+        buy_markup.add(InlineKeyboardButton(text="Owner Request (Buy Premium)", url="https://t.me/PayX_MM?text=key%20ဝယ်ချင်လို့ပါ"))
         bot.reply_to(message, "Access Blocked: You need an active key to parse data frames.\nClick button below to purchase or generate key from dashboard.", parse_mode="Markdown", reply_markup=buy_markup)
         return
 
-    if user_id not in ADMINS and game_type != "mlbb":
+    # Free user ကန့်သတ်ချက် (MLBB နှင့် MCGG သာ ခွင့်ပြုမည်)
+    FREE_GAMES = ["mlbb", "mcgg"]
+    if user_id not in ADMINS and game_type not in FREE_GAMES:
         buy_markup = InlineKeyboardMarkup()
-        buy_markup.add(InlineKeyboardButton(text="Owner Request (Unlock Premium)", url="[https://t.me/PayX_MM?text=key%20ဝယ](https://t.me/PayX_MM?text=key%20ဝယ)်ချင်လို့ပါ"))
+        buy_markup.add(InlineKeyboardButton(text="Owner Request (Unlock Premium)", url="https://t.me/PayX_MM?text=key%20ဝယ်ချင်လို့ပါ"))
         bot.reply_to(message, f"PREMIUM FEATURE:\n{game_type.upper()} parsing infrastructure is strictly reserved for Premium Subscribers only.", parse_mode="Markdown", reply_markup=buy_markup)
         return
 
     status_msg = bot.reply_to(message, "PROCESSING MATRIX FRAME...")
     
-    # Thread Control Event (စာသားပြန်ပျောက်သွားတဲ့ ပြဿနာကို ဖြေရှင်းရန်)
     stop_loading = threading.Event()
     loading_thread = threading.Thread(target=run_fast_loading, args=(message.chat.id, status_msg.message_id, stop_loading), daemon=True)
     loading_thread.start()
     
-    # API ခေါ်ယူခြင်း
     raw_data = call_game_api(game_type, main_id, extra_id)
     
-    # Loading Thread ကို ရပ်တန့်စေခြင်း
     stop_loading.set()
     loading_thread.join(timeout=0.5)
     
@@ -337,11 +353,10 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
                 break
     region = region or "Global Server"
 
-    payload_data = f"NAME  : {nickname}\nID    : {main_id}\nREGION: {region}"
+    payload_data = f"GAME  : {game_type.upper()}\nNAME  : {nickname}\nID    : {main_id}\nREGION: {region}"
     if extra_id:
-        payload_data = f"NAME  : {nickname}\nID    : {main_id} ({extra_id})\nREGION: {region}"
+        payload_data = f"GAME  : {game_type.upper()}\nNAME  : {nickname}\nID    : {main_id} ({extra_id})\nREGION: {region}"
 
-    # Output UI (Markdown Code Block ထဲထည့်ထားလို့ အလွယ်တကူ Copy ကူးနိုင်ပါပြီ)
     cool_neon_ui = (
         f"NEON MATRIX RESULT\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -361,7 +376,7 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
     except Exception: pass
 
 # =====================================================================
-# TEXT LOOKUP LISTENER
+# TEXT LOOKUP LISTENER & ROUTER
 # =====================================================================
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def advanced_text_router(message):
@@ -369,22 +384,38 @@ def advanced_text_router(message):
     
     text_clean = message.text.strip()
     
+    # 1. MLBB သို့မဟုတ် MCGG (နှစ်ခုလုံးက ID (Zone) ပုံစံတူညီကြပါတယ်)
+    # စာသားထဲတွင် mcgg သို့မဟုတ် magic ဟုပါလျှင် MCGG အဖြစ် စစ်ပေးပြီး ပုံမှန်ဆိုလျှင် MLBB ဟု ယူဆပါမည်
     ml_match = re.search(r'^(\d+)\s*[\(\[]\s*(\d+)\s*[\)\]]$', text_clean)
     if ml_match:
-        process_and_build_ui(message, "mlbb", ml_match.group(1), ml_match.group(2))
+        if "mcgg" in text_clean.lower() or "chess" in text_clean.lower():
+            process_and_build_ui(message, "mcgg", ml_match.group(1), ml_match.group(2))
+        else:
+            process_and_build_ui(message, "mlbb", ml_match.group(1), ml_match.group(2))
         return
 
+    # 2. Clash of Clans Tag Checker (# ပါပါ မပါပါ စစ်ဆေးပေးပါသည်)
     coc_match = re.search(r'^#?([A-Z0-9]{7,14})$', text_clean, re.IGNORECASE)
     if coc_match and not text_clean.isdigit():
         process_and_build_ui(message, "coc", coc_match.group(1).upper())
         return
 
+    # 3. ဂဏန်းသက်သက် ID များ စစ်ထုတ်ခြင်း (FF, PUBG, HOK, Blood Strike)
     if text_clean.isdigit():
         val_len = len(text_clean)
+        
+        # Free Fire ID Scope (8 မှ 10 လုံး)
         if 8 <= val_len <= 10:
             process_and_build_ui(message, "ff", text_clean)
-        elif 11 <= val_len <= 13:
+        # Blood Strike ID Scope (၁၁ လုံး သို့မဟုတ် ၁၂ လုံး)
+        elif 11 <= val_len <= 12:
+            process_and_build_ui(message, "blood-strike", text_clean)
+        # PUBG Mobile ID Scope (၁၃ လုံးအထိ)
+        elif val_len == 13:
             process_and_build_ui(message, "pubg", text_clean)
+        # Honor of Kings ID Scope (ဂဏန်းအရှည်ကြီး ၁၉ လုံးဝန်းကျင်)
+        elif 17 <= val_len <= 20:
+            process_and_build_ui(message, "honor-of-kings", text_clean)
         else:
             bot.reply_to(message, "System Warning: Digit scope length anomaly. Verify input structures.")
         return

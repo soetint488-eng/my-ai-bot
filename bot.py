@@ -6,24 +6,24 @@ import hashlib
 import threading
 import requests
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from flask import Flask, jsonify
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from flask import Flask
 
 # =====================================================================
-# FLASK WEB SERVER (CRON-JOB READY `200 OK` ENGINE)
+# FLASK WEB SERVER (PORT: 8000)
 # =====================================================================
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "200 OK - PayX-MM Core Server Online", 200
+    return "200 OK - PayX-MM Core Nitro Engine Online", 200
 
 def run_flask():
     port = int(os.environ.get("PORT", 8000))
     flask_app.run(host="0.0.0.0", port=port)
 
 # =====================================================================
-# CONFIGURATION, TOKENS & ADMIN CONFIG
+# CORE CONFIGURATION & CREDENTIALS
 # =====================================================================
 BOT_TOKEN = "8761954371:AAEwo75dbsAWpvxavxqWr3UbhjeRwknlWnI"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
@@ -33,357 +33,329 @@ OWNER_ID = 8584422107
 ADMINS = {OWNER_ID}
 
 bot = telebot.TeleBot(BOT_TOKEN)
-BRANDING = "PAYX-MM"
-HASH_FILE = "processed_slips.txt"
+BRANDING = "PAYX-MM NITRO"
+
+# Datastores (In-Memory Database Sync)
+USER_KEYS = {}        # { user_id: { "key": str, "generated_at": float } }
+BANNED_KEYS = set()   # { user_id (banned from using keys) }
 MUTED_USERS = set()
 
-def load_hashes():
-    if not os.path.exists(HASH_FILE):
-        return set()
-    with open(HASH_FILE, "r") as f:
-        return set(line.strip() for line in f if line.strip())
-
-def save_hash(img_hash):
-    PROCESSED_SLIPS.add(img_hash)
-    with open(HASH_FILE, "a") as f:
-        f.write(f"{img_hash}\n")
-
-PROCESSED_SLIPS = load_hashes()
+COOLDOWN_LIMIT = 3 * 60 * 60  # 3 Hours Premium Gate Cooldown Metric
 
 # =====================================================================
-# DYNAMIC TYPEWRITER HEADER LOOP ENGINE
+# FAST UI ANIMATION ENGINE (CLEAN FRAMES)
 # =====================================================================
-HEADER_FRAMES = [
-    "P", "PA", "PAY", "PAYX", "PAYX-", "PAYX-M", "PAYX-MM",
-    "PAYX-MM", "PAYX-M", "PAYX-", "PAYX", "PAY", "PA", "P", ""
+FAST_FRAMES = [
+    "[ P ]", "[ PA ]", "[ PAY ]", "[ PAYX ]", 
+    "[ PAYX- ]", "[ PAYX-M ]", "[ PAYX-MM ]"
 ]
 
-def persistent_header_loop(chat_id, message_id, base_text, markup):
-    frame_index = 0
-    while True:
-        try:
-            time.sleep(0.3)
-            current_frame = HEADER_FRAMES[frame_index]
-            full_content = f"--- [{current_frame}] ---\n{base_text}"
-            
-            bot.edit_message_text(
-                text=full_content,
-                chat_id=chat_id,
-                message_id=message_id,
-                parse_mode="Markdown",
-                reply_markup=markup
-            )
-            frame_index = (frame_index + 1) % len(HEADER_FRAMES)
-        except Exception:
-            break
-
-# =====================================================================
-# MUTED USER GUARD
-# =====================================================================
-@bot.message_handler(func=lambda msg: msg.from_user.id in MUTED_USERS)
-def handle_muted_restrictions(message):
+def run_fast_loading(chat_id, message_id):
     try:
-        bot.delete_message(message.chat.id, message.message_id)
+        for frame in FAST_FRAMES:
+            bot.edit_message_text(frame, chat_id, message_id)
+            time.sleep(0.08)
     except Exception: pass
 
 # =====================================================================
-# START COMMAND & MAIN CONTROL PANEL (ADMIN ONLY FEATURES IN PANEL)
+# DYNAMIC ROLE KEYBOARD SYSTEM
 # =====================================================================
-def run_start_sequence(chat_id, message_id):
-    try:
-        frames = ["[P]", "[PA]", "[PAY]", "[PAYX]", "[PAYX-]", "[PAYX-M]", "[PAYX-MM]"]
-        for f in frames:
-            bot.edit_message_text(f, chat_id, message_id)
-            time.sleep(0.15)
-        time.sleep(0.3)
-        bot.edit_message_text(".", chat_id, message_id)
-    except Exception: pass
-
-    guide = "====================\n  MAIN CONTROL PANEL\n====================\n\nSelect administration command options:"
-    markup = InlineKeyboardMarkup()
-    btn_slip = InlineKeyboardButton("Verify Receipt Slip", callback_data="info_slip")
-    btn_delete = InlineKeyboardButton("Close Panel", callback_data="delete_msg")
+def get_dynamic_keyboard(user_id):
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
     
-    markup.row(btn_slip)
-    markup.row(btn_delete)
-
-    try:
-        bot.edit_message_text(text=f"[PAYX-MM]\n\n{guide}", chat_id=chat_id, message_id=message_id, reply_markup=markup)
-        threading.Thread(target=persistent_header_loop, args=(chat_id, message_id, guide, markup), daemon=True).start()
-    except Exception: pass
+    if user_id in ADMINS:
+        btn_adm_panel = KeyboardButton("RED MATRIX PANEL (ADMIN ONLY)")
+        markup.add(btn_adm_panel)
+    else:
+        # Key ထုတ်သည့်နေရာတွင်သာ 🎁 အသုံးပြုထားပါသည်
+        btn_free_key = KeyboardButton("🎁 Get Free Key (3 Hours)")
+        markup.add(btn_free_key)
+        
+    return markup
 
 @bot.message_handler(commands=['start'])
-def send_welcome(message):
-    sent_msg = bot.send_message(message.chat.id, ".")
-    threading.Thread(target=run_start_sequence, args=(message.chat.id, sent_msg.message_id), daemon=True).start()
-
-# =====================================================================
-# CORE ADMIN & PROMOTION TOOLS
-# =====================================================================
-@bot.message_handler(commands=['addadmin'])
-def add_admin_privilege(message):
-    if message.from_user.id != OWNER_ID: return
-    args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Usage: /addadmin [User_ID]")
-    try:
-        target_id = int(args[1])
-        ADMINS.add(target_id)
-        bot.reply_to(message, f"Success: User {target_id} promoted to Bot Admin.")
-    except ValueError:
-        bot.reply_to(message, "Error: Invalid User ID format.")
-
-@bot.message_handler(commands=['userinfo'])
-def get_user_profile_info(message):
-    target_user = message.from_user
-    if message.reply_to_message:
-        target_user = message.reply_to_message.from_user
-        
-    info_payload = (
-        f"--- USER DATA PACK ---\n"
-        f"Username: @{target_user.username or 'None'}\n"
-        f"First Name: {target_user.first_name}\n"
-        f"User ID: `{target_user.id}`\n"
-        f"Admin Status: {target_user.id in ADMINS}"
+def handle_start_command(message):
+    user_id = message.from_user.id
+    
+    welcome_text = (
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"WELCOME TO {BRANDING}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Hi {message.from_user.first_name or 'User'},\n"
+        f"I am fully ready to parse and fetch your game profiles instantly!\n\n"
+        f"Input Format: Send game data directly (e.g., 2112723799 (19915))\n"
+        f"System auto-detected your role access matrix panel below."
     )
-    bot.reply_to(message, info_payload, parse_mode="Markdown")
+    bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown", reply_markup=get_dynamic_keyboard(user_id))
 
-@bot.message_handler(commands=['mute'])
-def action_mute_user(message):
-    if message.from_user.id not in ADMINS: return
-    if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to target user to mute.")
-    target_id = message.reply_to_message.from_user.id
-    if target_id in ADMINS: return bot.reply_to(message, "Action Denied: Target is admin.")
-    MUTED_USERS.add(target_id)
-    bot.reply_to(message, f"Success: User {target_id} has been muted.")
+# =====================================================================
+# 🎁 FREE USER 3-HOURS KEY GENERATOR LOGIC
+# =====================================================================
+@bot.message_handler(func=lambda msg: msg.text == "🎁 Get Free Key (3 Hours)")
+def generate_free_access_key(message):
+    user_id = message.from_user.id
+    current_time = time.time()
+    
+    if user_id in BANNED_KEYS:
+        return bot.reply_to(message, "Access Denied: Your key generation privileges have been suspended by admin.", parse_mode="Markdown")
+        
+    # Check 3-Hours Time Cooldown Limitation
+    if user_id in USER_KEYS:
+        last_generated = USER_KEYS[user_id]["generated_at"]
+        elapsed_time = current_time - last_generated
+        
+        if elapsed_time < COOLDOWN_LIMIT:
+            remaining_seconds = int(COOLDOWN_LIMIT - elapsed_time)
+            hours = remaining_seconds // 3600
+            minutes = (remaining_seconds % 3600) // 60
+            
+            buy_markup = InlineKeyboardMarkup()
+            btn_buy = InlineKeyboardButton(text="Owner Request (Buy Premium)", url="https://t.me/PayX_MM?text=key%20ဝယ်ချင်လို့ပါ")
+            buy_markup.add(btn_buy)
+            
+            return bot.send_message(
+                message.chat.id, 
+                f"🎁 Cooldown Active: You can generate your next free key in {hours}h {minutes}m.\n\nWant to bypass limitation with stable authorization?", 
+                parse_mode="Markdown", 
+                reply_markup=buy_markup
+            )
 
-@bot.message_handler(commands=['unmute'])
-def action_unmute_user(message):
-    if message.from_user.id not in ADMINS: return
-    if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to target user to unmute.")
-    target_id = message.reply_to_message.from_user.id
-    MUTED_USERS.discard(target_id)
-    bot.reply_to(message, f"Success: User {target_id} has been unmuted.")
-
-@bot.message_handler(commands=['ban'])
-def action_ban_user(message):
-    if message.from_user.id not in ADMINS: return
-    if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to target user to ban.")
-    target_id = message.reply_to_message.from_user.id
-    if target_id in ADMINS: return bot.reply_to(message, "Action Denied: Target is admin.")
-    try:
-        bot.ban_chat_member(message.chat.id, target_id)
-        bot.reply_to(message, f"Success: User {target_id} has been banned.")
-    except Exception as e:
-        bot.reply_to(message, f"Execution Error: {str(e)}")
-
-@bot.message_handler(commands=['unban'])
-def action_unban_user(message):
-    if message.from_user.id not in ADMINS: return
-    if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to target user to unban.")
-    target_id = message.reply_to_message.from_user.id
-    try:
-        bot.unban_chat_member(message.chat.id, target_id)
-        bot.reply_to(message, f"Success: User {target_id} has been unbanned.")
-    except Exception as e:
-        bot.reply_to(message, f"Execution Error: {str(e)}")
-
-@bot.message_handler(commands=['kick', 'remove'])
-def action_kick_user(message):
-    if message.from_user.id not in ADMINS: return
-    if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to target user to kick.")
-    target_id = message.reply_to_message.from_user.id
-    if target_id in ADMINS: return bot.reply_to(message, "Action Denied: Target is admin.")
-    try:
-        bot.ban_chat_member(message.chat.id, target_id)
-        bot.unban_chat_member(message.chat.id, target_id)
-        bot.reply_to(message, f"Success: User {target_id} has been kicked.")
-    except Exception as e:
-        bot.reply_to(message, f"Execution Error: {str(e)}")
-
-@bot.message_handler(commands=['purge', 'del'])
-def delete_targeted_message(message):
-    if message.from_user.id not in ADMINS: return
-    if not message.reply_to_message: return bot.reply_to(message, "Error: Reply to text to delete.")
-    try:
-        bot.delete_message(message.chat.id, message.reply_to_message.message_id)
-        bot.delete_message(message.chat.id, message.message_id)
+    # Generate MD5 Token Array
+    raw_token = f"PAYX-{user_id}-{current_time}"
+    generated_key = "PX-" + hashlib.md5(raw_token.encode()).hexdigest()[:12].upper()
+    
+    USER_KEYS[user_id] = {
+        "key": generated_key,
+        "generated_at": current_time,
+        "username": message.from_user.username or "None",
+        "first_name": message.from_user.first_name
+    }
+    
+    success_msg = (
+        f"🎁 SUCCESSFULLY GENERATED KEY 🎁\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Key: {generated_key}\n"
+        f"Status: Active for next 3 Hours\n"
+        f"Scope: MLBB Verification Unlocked\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Tap key block to instantly copy your key."
+    )
+    bot.reply_to(message, success_msg, parse_mode="Markdown")
+    
+    # Admin Log Monitor Notification
+    admin_alert = (
+        f"NEW KEY ISSUED\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"User: {message.from_user.first_name}\n"
+        f"ID: {user_id}\n"
+        f"User Name: @{message.from_user.username or 'None'}\n"
+        f"Token generated: {generated_key}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    try: bot.send_message(OWNER_ID, admin_alert, parse_mode="Markdown")
     except Exception: pass
 
-@bot.message_handler(commands=['broadcast'])
-def action_broadcast_transmission(message):
-    if message.from_user.id != OWNER_ID: return
-    content = message.text.replace("/broadcast", "").strip()
-    if not content: return bot.reply_to(message, "Usage: /broadcast [Content]")
-    bot.send_message(message.chat.id, f"--- GLOBAL BROADCAST ---\n\n{content}")
+# =====================================================================
+# ADMIN PANEL CONTROL DASHBOARD
+# =====================================================================
+@bot.message_handler(func=lambda msg: msg.text == "RED MATRIX PANEL (ADMIN ONLY)")
+def trigger_admin_dashboard_from_keyboard(message):
+    if message.from_user.id not in ADMINS: return
+    
+    admin_text = (
+        f"PAYX-MM RED COMMAND DASHBOARD\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Welcome Supreme Commander. Manage temporary keys, ban regulations and parameters below:"
+    )
+    
+    markup = InlineKeyboardMarkup()
+    btn_check = InlineKeyboardButton("Check Key Users (Active)", callback_data="adm_check_keys")
+    btn_ban = InlineKeyboardButton("Ban Key Privileges", callback_data="adm_ban_prompt")
+    btn_unban = InlineKeyboardButton("Unban Key Privileges", callback_data="adm_unban_prompt")
+    btn_close = InlineKeyboardButton("Dismiss Panel", callback_data="delete_msg")
+    
+    markup.row(btn_check)
+    markup.row(btn_ban, btn_unban)
+    markup.row(btn_close)
+    
+    bot.send_message(message.chat.id, admin_text, parse_mode="Markdown", reply_markup=markup)
 
-# =====================================================================
-# CALCULATOR UTILITY LOGIC
-# =====================================================================
-@bot.message_handler(commands=['calc'])
-def processing_calculator_expression(message):
-    expression = message.text.replace("/calc", "").strip()
-    if not expression: return bot.reply_to(message, "Usage: /calc 500 * 2")
-    expression = re.sub(r'[^0-9+\-*/().\s]', '', expression)
-    if not expression.strip(): return bot.reply_to(message, "Error: Structural violation.")
+@bot.callback_query_handler(func=lambda call: call.data.startswith("adm_") or call.data == "delete_msg")
+def admin_callback_processor(call):
+    if call.data == "delete_msg":
+        try: bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception: pass
+        return
+
+    if call.from_user.id not in ADMINS: return
+
+    bot.answer_callback_query(call.id)
+    
+    if call.data == "adm_check_keys":
+        if not USER_KEYS:
+            bot.send_message(call.message.chat.id, "No keys are currently recorded in volatile active memory.")
+            return
+            
+        report = "ACTIVE KEY REALTIME USERS:\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        for uid, data in USER_KEYS.items():
+            report += f"User: {data['first_name']} ({uid}) -> Key: {data['key']}\n"
+        bot.send_message(call.message.chat.id, report, parse_mode="Markdown")
+        
+    elif call.data == "adm_ban_prompt":
+        msg = bot.send_message(call.message.chat.id, "Please reply to this message or type the User ID to BAN from key system:")
+        bot.register_next_step_handler(msg, process_ban_action)
+        
+    elif call.data == "adm_unban_prompt":
+        msg = bot.send_message(call.message.chat.id, "Please reply to this message or type the User ID to UNBAN from key system:")
+        bot.register_next_step_handler(msg, process_unban_action)
+
+def process_ban_action(message):
     try:
-        computation = eval(expression)
-        bot.reply_to(message, f"--- CALCULATION MATRIX ---\n\nExpression: {expression}\nResult: `{computation}`", parse_mode="Markdown")
-    except Exception:
-        bot.reply_to(message, "Error: Failed to process calculation.")
+        target_id = int(message.text.strip())
+        BANNED_KEYS.add(target_id)
+        USER_KEYS.pop(target_id, None)
+        bot.reply_to(message, f"Target {target_id} successfully blacklisted from generating keys.", parse_mode="Markdown")
+    except ValueError:
+        bot.reply_to(message, "Invalid syntax. Please output numerical profile IDs only.")
+
+def process_unban_action(message):
+    try:
+        target_id = int(message.text.strip())
+        BANNED_KEYS.discard(target_id)
+        bot.reply_to(message, f"Target {target_id} successfully reinstated to system infrastructure.", parse_mode="Markdown")
+    except ValueError:
+        bot.reply_to(message, "Invalid syntax. Please output numerical profile IDs only.")
 
 # =====================================================================
-# RAPIDAPI TERMINAL ROUTER (MULTI-GAME COMPATIBLE)
+# MULTI-GAME ROUTER & REGION PARSER
 # =====================================================================
-def call_game_api(game_type, target_id):
+def call_game_api(game_type, main_id, extra_id=None):
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY, 
         "Content-Type": "application/json",
         "x-rapidapi-host": RAPIDAPI_HOST
     }
+    
     if game_type == "mlbb":
-        url = f"https://{RAPIDAPI_HOST}/mobile-legends/{target_id}"
+        url = f"https://{RAPIDAPI_HOST}/mobile-legends/{main_id}/{extra_id}"
     elif game_type == "ff":
-        url = f"https://{RAPIDAPI_HOST}/ff-global/{target_id}"
+        url = f"https://{RAPIDAPI_HOST}/ff-global/{main_id}"
     elif game_type == "pubg":
-        url = f"https://{RAPIDAPI_HOST}/pubgm-global/{target_id}"
+        url = f"https://{RAPIDAPI_HOST}/pubgm-global/{main_id}"
     elif game_type == "coc":
-        url = f"https://{RAPIDAPI_HOST}/coc/{target_id}"
+        url = f"https://{RAPIDAPI_HOST}/coc/{main_id}"
         
     try:
         r = requests.get(url, headers=headers, timeout=12)
-        if r.status_code != 200: return None, f"Status {r.status_code}"
-        return r.json(), None
-    except Exception as e: 
-        return None, str(e)
+        if r.status_code != 200: return None
+        return r.json()
+    except Exception: return None
 
-# =====================================================================
-# CALLBACK QUERY SYSTEM & INFO ROUTING
-# =====================================================================
-@bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
-    if call.data == "delete_msg":
-        try: bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception: pass
+def check_user_key_validity(user_id):
+    if user_id in ADMINS: return True
+    if user_id not in USER_KEYS: return False
+    
+    elapsed = time.time() - USER_KEYS[user_id]["generated_at"]
+    if elapsed > COOLDOWN_LIMIT:
+        USER_KEYS.pop(user_id, None)
+        return False
+    return True
+
+def process_and_build_ui(message, game_type, main_id, extra_id=None):
+    user_id = message.from_user.id
+    
+    # Key မရှိလျှင်/သက်တမ်းကုန်လျှင် စစ်ခွင့်မပြုခြင်း
+    if not check_user_key_validity(user_id):
+        buy_markup = InlineKeyboardMarkup()
+        buy_markup.add(InlineKeyboardButton(text="Owner Request (Buy Premium)", url="https://t.me/PayX_MM?text=key%20ဝယ်ချင်လို့ပါ"))
+        bot.reply_to(message, "Access Blocked: You need an active key to parse data frames.\nClick button below to purchase or generate key from dashboard.", parse_mode="Markdown", reply_markup=buy_markup)
+        return
+
+    # Free Key သမားအတွက် MLBB မှလွဲ၍ ကျန်ဂိမ်းများကို Lock ချခြင်း
+    if user_id not in ADMINS and game_type != "mlbb":
+        buy_markup = InlineKeyboardMarkup()
+        buy_markup.add(InlineKeyboardButton(text="Owner Request (Unlock Premium)", url="https://t.me/PayX_MM?text=key%20ဝယ်ချင်လို့ပါ"))
+        bot.reply_to(message, f"PREMIUM FEATURE:\n{game_type.upper()} parsing infrastructure is strictly reserved for Premium Subscribers only.", parse_mode="Markdown", reply_markup=buy_markup)
+        return
+
+    status_msg = bot.reply_to(message, "PROCESSING MATRIX FRAME...")
+    threading.Thread(target=run_fast_loading, args=(message.chat.id, status_msg.message_id), daemon=True).start()
+    
+    raw_data = call_game_api(game_type, main_id, extra_id)
+    
+    if not raw_data:
+        bot.edit_message_text("API Transmission Interrupted or Account Invalid.", message.chat.id, status_msg.message_id, parse_mode="Markdown")
         return
         
-    bot.answer_callback_query(call.id)
-    if call.data == "info_slip":
-        msg_text = "Please upload or forward the receipt screenshot image here."
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
+    nickname = raw_data.get("nickname") or raw_data.get("username") or raw_data.get("name")
+    if not nickname:
+        for key in ["data", "result"]:
+            if key in raw_data and isinstance(raw_data[key], dict):
+                inner = raw_data[key]
+                nickname = inner.get("nickname") or inner.get("username") or inner.get("name")
+                break
+    nickname = nickname or "Unknown Player"
+    
+    region = raw_data.get("region") or raw_data.get("country") or raw_data.get("zone")
+    if not region:
+        for key in ["data", "result", "meta"]:
+            if key in raw_data and isinstance(raw_data[key], dict):
+                inner = raw_data[key]
+                region = inner.get("region") or inner.get("country") or inner.get("area") or inner.get("zone_id")
+                break
+    region = region or "Global Server"
 
-# =====================================================================
-# RECEIPT DUPLICATE CHECKER SYSTEM
-# =====================================================================
-@bot.message_handler(content_types=['photo'])
-def handle_slip_verification(message):
+    payload_data = f"NAME  : {nickname}\nID    : {main_id}\nREGION: {region}"
+    if extra_id:
+        payload_data = f"NAME  : {nickname}\nID    : {main_id} ({extra_id})\nREGION: {region}"
+
+    cool_neon_ui = (
+        f"NEON MATRIX RESULT\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"```\n"
+        f"{payload_data}\n"
+        f"
+```\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Tap dark code block area above to auto copy instantly"
+    )
+    
+    markup = InlineKeyboardMarkup()
+    btn_delete = InlineKeyboardButton(text="Delete Result", callback_data="delete_msg")
+    markup.row(btn_delete)
+    
     try:
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        img_hash = hashlib.md5(downloaded_file).hexdigest()
-        
-        if img_hash in PROCESSED_SLIPS:
-            ui_response = "--- DUPLICATE DETECTED ---\n\nWarning: This receipt is already registered in database."
-            sent = bot.reply_to(message, f"[PAYX-MM]\n\n{ui_response}")
-            threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, ui_response, None), daemon=True).start()
-        else:
-            save_hash(img_hash)
-            ui_response = f"--- VERIFICATION PASS ---\n\nClean transaction accepted.\n\nToken: `{img_hash[:12]}`"
-            sent = bot.reply_to(message, f"[PAYX-MM]\n\n{ui_response}", parse_mode="Markdown")
-            threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, ui_response, None), daemon=True).start()
-    except Exception as e:
-        bot.reply_to(message, f"System Error: {str(e)}")
+        bot.edit_message_text(cool_neon_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=markup)
+    except Exception: pass
 
 # =====================================================================
-# GENERAL SMART LOOKUP PARSER WITH ONE-TAP CONFIG
-# =====================================================================
-def parse_and_send_result(message, game_type, main_id, extra_id=None):
-    api_query_id = f"{main_id}/{extra_id}" if extra_id else main_id
-    
-    status_msg = bot.reply_to(message, f"Scanning {game_type.upper()} mainframe matrix...")
-    result, error = call_game_api(game_type, api_query_id)
-    
-    if error:
-        bot.edit_message_text(f"Connection Error: {error}", message.chat.id, status_msg.message_id)
-        return
-        
-    if result:
-        nickname = result.get("nickname") or result.get("username") or result.get("name")
-        if not nickname:
-            for key in ["data", "result"]:
-                if key in result and isinstance(result[key], dict):
-                    inner = result[key]
-                    nickname = inner.get("nickname") or inner.get("username") or inner.get("name")
-                    break
-        nickname = nickname or "Verified Player"
-        
-        # Game Type အလိုက် Region/Zone ပြသပေးမှု Format အလှပြင်ဆင်ခြင်း
-        if game_type == "mlbb":
-            payload_data = f"{nickname} {main_id} ({extra_id})"
-        elif game_type == "coc":
-            payload_data = f"{nickname} #{main_id}"
-        else:
-            # FF နှင့် PUBG တို့အတွက် Name ရော ID/Region Data ပါ တွဲလျက်ပြသပေးခြင်း
-            payload_data = f"{nickname} {main_id}"
-        
-        cool_ui = (
-            f"**{BRANDING}**\n\n"
-            f"Result: `{payload_data}`\n\n"
-            f"ℹ️ *Tap the results block above to copy instantly*"
-        )
-        
-        copy_markup = InlineKeyboardMarkup()
-        btn_delete = InlineKeyboardButton(text="Delete", callback_data="delete_msg")
-        copy_markup.row(btn_delete)
-        
-        bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
-        
-        threading.Thread(
-            target=persistent_header_loop, 
-            args=(message.chat.id, status_msg.message_id, cool_ui, copy_markup), 
-            daemon=True
-        ).start()
-
-# =====================================================================
-# ALL IN ONE SMART TEXT LOOKUP LISTENER (MLBB, FF, PUBG, COC AUTO-DETECT)
+# TEXT LOOKUP LISTENER
 # =====================================================================
 @bot.message_handler(func=lambda message: True, content_types=['text'])
-def handle_smart_game_lookups(message):
-    if message.text.startswith('/'):
-        return
-
+def advanced_text_router(message):
+    if message.text.startswith('/'): return
+    
     text_clean = message.text.strip()
-
-    # 1️⃣ Rule for MLBB (ဥပမာ - 2112723799 (19915))
+    
     ml_match = re.search(r'^(\d+)\s*[\(\[]\s*(\d+)\s*[\)\]]$', text_clean)
     if ml_match:
-        parse_and_send_result(message, "mlbb", ml_match.group(1), ml_match.group(2))
+        process_and_build_ui(message, "mlbb", ml_match.group(1), ml_match.group(2))
         return
 
-    # 2️⃣ Rule for Clash of Clans Player Tag (ဥပမာ - #20C0RVGL သို့မဟုတ် 20C0RVGL)
-    # COC tags တွေက များသောအားဖြင့် alphanumeric 7 ကနေ 9 လုံးအထိရှိပြီး # ပါတတ်ပါတယ်
-    coc_match = re.search(r'^#?([A-Z0-9]{7,12})$', text_clean, re.IGNORECASE)
+    coc_match = re.search(r'^#?([A-Z0-9]{7,14})$', text_clean, re.IGNORECASE)
     if coc_match and not text_clean.isdigit():
-        parse_and_send_result(message, "coc", coc_match.group(1).upper())
+        process_and_build_ui(message, "coc", coc_match.group(1).upper())
         return
 
-    # 3️⃣ Rule for Free Fire / PUBG Mobile (ဂဏန်းသီးသန့် 8 လုံးမှ 12 လုံးအထိ)
-    # မှတ်ချက်- MLBB ပုံစံမဟုတ်ဘဲ ဂဏန်းသီးသန့်ချည်းပဲဆိုရင် FF သို့မဟုတ် PUBG ID အဖြစ် Detect လုပ်ပါတယ်
-    if text_clean.isdigit() and 8 <= len(text_clean) <= 12:
-        # ဒီနေရာမှာ API က FF ရော PUBG ရော Host တစ်ခုတည်းက သွားတာမို့လို့ 
-        # ပုံမှန်အားဖြင့် ID checker logic အရ default တစ်ခုခု (ဥပမာ - pubg သို့မဟုတ် ff) အရင် စမ်းစစ်ခေါ်ယူပေးမှာဖြစ်ပါတယ်
-        # (အကယ်၍ API ခွဲချင်ရင် Default အနေနဲ့ PUBG အဖြစ် အရင်စစ်ပေးလိုက်ပါမယ်)
-        parse_and_send_result(message, "pubg", text_clean)
+    if text_clean.isdigit():
+        val_len = len(text_clean)
+        if 8 <= val_len <= 10:
+            process_and_build_ui(message, "ff", text_clean)
+        elif 11 <= val_len <= 13:
+            process_and_build_ui(message, "pubg", text_clean)
+        else:
+            bot.reply_to(message, "System Warning: Digit scope length anomaly. Verify input structures.")
         return
-
-    # အကယ်၍ အပေါ်က ဘယ် Regex နဲ့မှ မကိုက်ညီရင် Spam Filter Block ထဲ ပို့မယ်
-    if message.chat.type in ['group', 'supergroup'] and message.from_user.id not in ADMINS:
-        UNWANTED_PATTERNS = [r't\.me/joinchat', r't\.me/\+', r'http[s]?://', r'crypto', r'casino', r'betting']
-        for regex_item in UNWANTED_PATTERNS:
-            if re.search(regex_item, message.text, re.IGNORECASE):
-                try: bot.delete_message(message.chat.id, message.message_id)
-                except Exception: pass
-                break
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()

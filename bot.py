@@ -50,9 +50,11 @@ FAST_FRAMES = [
     "[ PAYX- ]", "[ PAYX-M ]", "[ PAYX-MM ]"
 ]
 
-def run_fast_loading(chat_id, message_id):
+def run_fast_loading(chat_id, message_id, stop_event):
     try:
         for frame in FAST_FRAMES:
+            if stop_event.is_set():
+                break
             bot.edit_message_text(frame, chat_id, message_id)
             time.sleep(0.08)
     except Exception: pass
@@ -62,28 +64,39 @@ def run_fast_loading(chat_id, message_id):
 # =====================================================================
 def get_dynamic_keyboard(user_id):
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
-    
     if user_id in ADMINS:
         btn_adm_panel = KeyboardButton("RED MATRIX PANEL (ADMIN ONLY)")
         markup.add(btn_adm_panel)
     else:
-        # Key ထုတ်သည့် နေရာတစ်ခုတည်းတွင်သာ 🎁 Emoji ကို ခွင့်ပြုထားပါသည်
         btn_free_key = KeyboardButton("🎁 Get Free Key (3 Hours)")
         markup.add(btn_free_key)
-        
+    return markup
+
+# GAME CHECK LOCK PANEL (FOR FREE / PREMIUM USERS)
+def get_game_check_panel(user_id):
+    markup = InlineKeyboardMarkup()
+    if user_id in ADMINS:
+        # Admin ဆိုရင် အားလုံး ပွင့်မယ်
+        markup.row(InlineKeyboardButton("🟢 Mobile Legends", callback_data="chk_mlbb"))
+        markup.row(InlineKeyboardButton("🟢 Clash of Clans", callback_data="chk_coc"))
+        markup.row(InlineKeyboardButton("🟢 Free Fire", callback_data="chk_ff"), InlineKeyboardButton("🟢 PUBG Mobile", callback_data="chk_pubg"))
+    else:
+        # Free User ဆိုရင် MLBB ပဲပွင့်ပြီး ကျန်တာ Lock ကျနေမယ်
+        markup.row(InlineKeyboardButton("🟢 Mobile Legends Verification", callback_data="chk_mlbb"))
+        markup.row(InlineKeyboardButton("🔒 Clash of Clans (Locked)", callback_data="game_locked"))
+        markup.row(InlineKeyboardButton("🔒 Free Fire (Locked)", callback_data="game_locked"), InlineKeyboardButton("🔒 PUBG Mobile (Locked)", callback_data="game_locked"))
     return markup
 
 @bot.message_handler(commands=['start'])
 def handle_start_command(message):
     user_id = message.from_user.id
-    
     welcome_text = (
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"WELCOME TO {BRANDING}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"Hi {message.from_user.first_name or 'User'},\n"
         f"I am fully ready to parse and fetch your game profiles instantly!\n\n"
-        f"Input Format: Send game data directly (e.g., 2112723799 (19915))\n"
+        f"Input Format: Send game data directly (e.g., `2112723799 (19915)`)\n"
         f"System auto-detected your role access matrix panel below."
     )
     bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown", reply_markup=get_dynamic_keyboard(user_id))
@@ -110,14 +123,15 @@ def generate_free_access_key(message):
             minutes = (remaining_seconds % 3600) // 60
             
             buy_markup = InlineKeyboardMarkup()
-            btn_buy = InlineKeyboardButton(text="Owner Request (Buy Premium)", url="https://t.me/PayX_MM?text=key%20ဝယ်ချင်လို့ပါ")
+            btn_buy = InlineKeyboardButton(text="Owner Request (Buy Premium)", url="[https://t.me/PayX_MM?text=key%20ဝယ](https://t.me/PayX_MM?text=key%20ဝယ)်ချင်လို့ပါ")
             buy_markup.add(btn_buy)
             
+            # Cooldown ရှိနေပေမယ့် လက်ရှိ Key မကုန်သေးရင် စစ်လို့ရမည့် Button ထည့်ပေးထားပါတယ်
             return bot.send_message(
                 message.chat.id, 
-                f"🎁 Cooldown Active: You can generate your next free key in {hours}h {minutes}m.\n\nWant to bypass limitation with stable authorization?", 
+                f"🎁 *Cooldown Active*: You can generate your next free key in `{hours}h {minutes}m`.\n\nWant to bypass limitation with stable authorization?", 
                 parse_mode="Markdown", 
-                reply_markup=buy_markup
+                reply_markup=get_game_check_panel(user_id)
             )
 
     # Generate MD5 Token Array
@@ -134,22 +148,24 @@ def generate_free_access_key(message):
     success_msg = (
         f"🎁 SUCCESSFULLY GENERATED KEY 🎁\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"Key: {generated_key}\n"
+        f"Key: `{generated_key}`\n"
         f"Status: Active for next 3 Hours\n"
         f"Scope: MLBB Verification Unlocked\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"Tap key block to instantly copy your key."
+        f"Tap key block to instantly copy your key.\n"
+        f"Choose your gate action from the dashboard button below:"
     )
-    bot.reply_to(message, success_msg, parse_mode="Markdown")
+    # Key ထုတ်ပြီးတာနဲ့ Check Buttons Panel ကို တန်းပြပေးလိုက်ပါတယ်
+    bot.reply_to(message, success_msg, parse_mode="Markdown", reply_markup=get_game_check_panel(user_id))
     
-    # Admin Log Monitor Notification
+    # Admin Log Monitor Notification (Markdown Code Block ဖြင့် ပြင်ဆင်ပြီး)
     admin_alert = (
         f"NEW KEY ISSUED\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"User: {message.from_user.first_name}\n"
-        f"ID: {user_id}\n"
+        f"User: `{message.from_user.first_name}`\n"
+        f"ID: `{user_id}`\n"
         f"User Name: @{message.from_user.username or 'None'}\n"
-        f"Token generated: {generated_key}\n"
+        f"Token generated: `{generated_key}`\n"
         f"━━━━━━━━━━━━━━━━━━━━━━"
     )
     try: bot.send_message(OWNER_ID, admin_alert, parse_mode="Markdown")
@@ -180,15 +196,23 @@ def trigger_admin_dashboard_from_keyboard(message):
     
     bot.send_message(message.chat.id, admin_text, parse_mode="Markdown", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("adm_") or call.data == "delete_msg")
-def admin_callback_processor(call):
+@bot.callback_query_handler(func=lambda call: call.data.startswith("adm_") or call.data in ["delete_msg", "game_locked", "chk_mlbb", "chk_coc", "chk_ff", "chk_pubg"])
+def callback_processor(call):
     if call.data == "delete_msg":
         try: bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception: pass
         return
 
-    if call.from_user.id not in ADMINS: return
+    if call.data == "game_locked":
+        bot.answer_callback_query(call.id, "❌ Premium Subscription Needed to Unlock!", show_alert=True)
+        return
 
+    if call.data.startswith("chk_"):
+        game_name = call.data.replace("chk_", "").upper()
+        bot.answer_callback_query(call.id, f"Direct Method Enabled: Please send {game_name} input directly to the chat context.")
+        return
+
+    if call.from_user.id not in ADMINS: return
     bot.answer_callback_query(call.id)
     
     if call.data == "adm_check_keys":
@@ -198,7 +222,7 @@ def admin_callback_processor(call):
             
         report = "ACTIVE KEY REALTIME USERS:\n━━━━━━━━━━━━━━━━━━━━━━\n"
         for uid, data in USER_KEYS.items():
-            report += f"User: {data['first_name']} ({uid}) -> Key: {data['key']}\n"
+            report += f"User: `{data['first_name']}` (`{uid}`) -> Key: `{data['key']}`\n"
         bot.send_message(call.message.chat.id, report, parse_mode="Markdown")
         
     elif call.data == "adm_ban_prompt":
@@ -214,7 +238,7 @@ def process_ban_action(message):
         target_id = int(message.text.strip())
         BANNED_KEYS.add(target_id)
         USER_KEYS.pop(target_id, None)
-        bot.reply_to(message, f"Target {target_id} successfully blacklisted from generating keys.", parse_mode="Markdown")
+        bot.reply_to(message, f"Target `{target_id}` successfully blacklisted from generating keys.", parse_mode="Markdown")
     except ValueError:
         bot.reply_to(message, "Invalid syntax. Please output numerical profile IDs only.")
 
@@ -222,7 +246,7 @@ def process_unban_action(message):
     try:
         target_id = int(message.text.strip())
         BANNED_KEYS.discard(target_id)
-        bot.reply_to(message, f"Target {target_id} successfully reinstated to system infrastructure.", parse_mode="Markdown")
+        bot.reply_to(message, f"Target `{target_id}` successfully reinstated to system infrastructure.", parse_mode="Markdown")
     except ValueError:
         bot.reply_to(message, "Invalid syntax. Please output numerical profile IDs only.")
 
@@ -264,27 +288,35 @@ def check_user_key_validity(user_id):
 def process_and_build_ui(message, game_type, main_id, extra_id=None):
     user_id = message.from_user.id
     
-    # Key မရှိလျှင်/သက်တမ်းကုန်လျှင် စစ်ခွင့်မပြုခြင်း
     if not check_user_key_validity(user_id):
         buy_markup = InlineKeyboardMarkup()
-        buy_markup.add(InlineKeyboardButton(text="Owner Request (Buy Premium)", url="https://t.me/PayX_MM?text=key%20ဝယ်ချင်လို့ပါ"))
+        buy_markup.add(InlineKeyboardButton(text="Owner Request (Buy Premium)", url="[https://t.me/PayX_MM?text=key%20ဝယ](https://t.me/PayX_MM?text=key%20ဝယ)်ချင်လို့ပါ"))
         bot.reply_to(message, "Access Blocked: You need an active key to parse data frames.\nClick button below to purchase or generate key from dashboard.", parse_mode="Markdown", reply_markup=buy_markup)
         return
 
-    # Free Key သမားအတွက် MLBB မှလွဲ၍ ကျန်ဂိမ်းများကို Lock ချခြင်း
     if user_id not in ADMINS and game_type != "mlbb":
         buy_markup = InlineKeyboardMarkup()
-        buy_markup.add(InlineKeyboardButton(text="Owner Request (Unlock Premium)", url="https://t.me/PayX_MM?text=key%20ဝယ်ချင်လို့ပါ"))
+        buy_markup.add(InlineKeyboardButton(text="Owner Request (Unlock Premium)", url="[https://t.me/PayX_MM?text=key%20ဝယ](https://t.me/PayX_MM?text=key%20ဝယ)်ချင်လို့ပါ"))
         bot.reply_to(message, f"PREMIUM FEATURE:\n{game_type.upper()} parsing infrastructure is strictly reserved for Premium Subscribers only.", parse_mode="Markdown", reply_markup=buy_markup)
         return
 
     status_msg = bot.reply_to(message, "PROCESSING MATRIX FRAME...")
-    threading.Thread(target=run_fast_loading, args=(message.chat.id, status_msg.message_id), daemon=True).start()
     
+    # Thread Control Event (စာသားပြန်ပျောက်သွားတဲ့ ပြဿနာကို ဖြေရှင်းရန်)
+    stop_loading = threading.Event()
+    loading_thread = threading.Thread(target=run_fast_loading, args=(message.chat.id, status_msg.message_id, stop_loading), daemon=True)
+    loading_thread.start()
+    
+    # API ခေါ်ယူခြင်း
     raw_data = call_game_api(game_type, main_id, extra_id)
     
+    # Loading Thread ကို ရပ်တန့်စေခြင်း
+    stop_loading.set()
+    loading_thread.join(timeout=0.5)
+    
     if not raw_data:
-        bot.edit_message_text("API Transmission Interrupted or Account Invalid.", message.chat.id, status_msg.message_id, parse_mode="Markdown")
+        try: bot.edit_message_text("API Transmission Interrupted or Account Invalid.", message.chat.id, status_msg.message_id, parse_mode="Markdown")
+        except Exception: pass
         return
         
     nickname = raw_data.get("nickname") or raw_data.get("username") or raw_data.get("name")
@@ -309,6 +341,7 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
     if extra_id:
         payload_data = f"NAME  : {nickname}\nID    : {main_id} ({extra_id})\nREGION: {region}"
 
+    # Output UI (Markdown Code Block ထဲထည့်ထားလို့ အလွယ်တကူ Copy ကူးနိုင်ပါပြီ)
     cool_neon_ui = (
         f"NEON MATRIX RESULT\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"

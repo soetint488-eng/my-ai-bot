@@ -25,7 +25,7 @@ def run_flask():
 # =====================================================================
 # CONFIGURATION, TOKENS & ADMIN CONFIG
 # =====================================================================
-BOT_TOKEN = "8761954371:AAEwo75dbsAWpvxavxqWr3UbhjeRwknlWnI"
+BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
 
@@ -78,30 +78,6 @@ def persistent_header_loop(chat_id, message_id, base_text, markup):
             break
 
 # =====================================================================
-# HELP SYSTEM COMMAND MANUAL
-# =====================================================================
-def get_help_text():
-    return (
-        f"--- {BRANDING} COMMANDS LIST ---\n\n"
-        "**Core Commands:**\n"
-        "/start - Load Dashboard Interface\n"
-        "/help - Display System Manual\n\n"
-        "**Game Lookups:**\n"
-        "/ml [ID] ([Zone]) - Scan Mobile Legends\n"
-        "/ff [UID] - Scan Free Fire\n"
-        "/pubg [ID] - Scan PUBG Mobile\n"
-        "/coc [Tag] - Scan Clash of Clans\n\n"
-        "**Tools & Administration:**\n"
-        "/copy - Reply to format/extract text\n"
-        "/calc [Expr] - Core Calculator Matrix\n"
-        "/addadmin [User_ID] - Promote Admin (Owner Only)"
-    )
-
-@bot.message_handler(commands=['help'])
-def show_help_manual(message):
-    bot.reply_to(message, get_help_text(), parse_mode="Markdown")
-
-# =====================================================================
 # MUTED USER GUARD
 # =====================================================================
 @bot.message_handler(func=lambda msg: msg.from_user.id in MUTED_USERS)
@@ -111,7 +87,7 @@ def handle_muted_restrictions(message):
     except Exception: pass
 
 # =====================================================================
-# START COMMAND & CONTROL PANEL
+# START COMMAND & MAIN CONTROL PANEL (ADMIN ONLY FEATURES IN PANEL)
 # =====================================================================
 def run_start_sequence(chat_id, message_id):
     try:
@@ -123,19 +99,13 @@ def run_start_sequence(chat_id, message_id):
         bot.edit_message_text(".", chat_id, message_id)
     except Exception: pass
 
-    guide = "====================\n  MAIN CONTROL PANEL\n====================\n\nSelect target option to verify data:"
+    guide = "====================\n  MAIN CONTROL PANEL\n====================\n\nSelect administration command options:"
     markup = InlineKeyboardMarkup()
-    btn_ml = InlineKeyboardButton("Mobile Legends", callback_data="info_ml")
-    btn_ff = InlineKeyboardButton("Free Fire", callback_data="info_ff")
-    btn_pubg = InlineKeyboardButton("PUBG Mobile", callback_data="info_pubg")
-    btn_coc = InlineKeyboardButton("Clash of Clans", callback_data="info_coc")
     btn_slip = InlineKeyboardButton("Verify Receipt Slip", callback_data="info_slip")
-    btn_help = InlineKeyboardButton("🔴 /help", callback_data="trigger_help_panel")
+    btn_delete = InlineKeyboardButton("Close Panel", callback_data="delete_msg")
     
-    markup.row(btn_ml, btn_ff)
-    markup.row(btn_pubg, btn_coc)
     markup.row(btn_slip)
-    markup.row(btn_help)
+    markup.row(btn_delete)
 
     try:
         bot.edit_message_text(text=f"[PAYX-MM]\n\n{guide}", chat_id=chat_id, message_id=message_id, reply_markup=markup)
@@ -262,24 +232,7 @@ def processing_calculator_expression(message):
         bot.reply_to(message, "Error: Failed to process calculation.")
 
 # =====================================================================
-# GROUP SCRUBBER & SPAM FILTER (CLEAN UNWANTED CHAT TRAFFIC)
-# =====================================================================
-UNWANTED_PATTERNS = [
-    r't\.me/joinchat', r't\.me/\+', r'http[s]?://', r'crypto', r'casino', r'betting'
-]
-
-@bot.message_handler(func=lambda msg: msg.chat.type in ['group', 'supergroup'])
-def group_spam_moderator(message):
-    if message.from_user.id in ADMINS: return
-    if not message.text: return
-    for regex_item in UNWANTED_PATTERNS:
-        if re.search(regex_item, message.text, re.IGNORECASE):
-            try: bot.delete_message(message.chat.id, message.message_id)
-            except Exception: pass
-            break
-
-# =====================================================================
-# RAPIDAPI TERMINAL ROUTER
+# RAPIDAPI TERMINAL ROUTER (MULTI-GAME COMPATIBLE)
 # =====================================================================
 def call_game_api(game_type, target_id):
     headers = {
@@ -295,6 +248,7 @@ def call_game_api(game_type, target_id):
         url = f"https://{RAPIDAPI_HOST}/pubgm-global/{target_id}"
     elif game_type == "coc":
         url = f"https://{RAPIDAPI_HOST}/coc/{target_id}"
+        
     try:
         r = requests.get(url, headers=headers, timeout=12)
         if r.status_code != 200: return None, f"Status {r.status_code}"
@@ -311,35 +265,9 @@ def callback_handler(call):
         try: bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception: pass
         return
-
-    if call.data == "trigger_help_panel":
-        bot.answer_callback_query(call.id)
-        bot.send_message(call.message.chat.id, get_help_text(), parse_mode="Markdown")
-        return
-
+        
     bot.answer_callback_query(call.id)
-    
-    if call.data == "info_ml":
-        msg_text = "--- PAYX FORMAT ---\n  /ml [User_ID] ([Zone_ID])\n-------------------\n\nFormat Example:\n/ml `2112723799` (`19915`)"
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
-        
-    elif call.data == "info_ff":
-        msg_text = "--- PAYX FORMAT ---\n  /ff [Player_UID]\n-------------------\n\nFormat Example:\n/ff `3108721457`"
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
-        
-    elif call.data == "info_pubg":
-        msg_text = "--- PAYX FORMAT ---\n  /pubg [Character_ID]\n-------------------\n\nFormat Example:\n/pubg `5204837417`"
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
-        
-    elif call.data == "info_coc":
-        msg_text = "--- PAYX FORMAT ---\n  /coc [Player_Tag]\n-------------------\n\nFormat Example:\n/coc `20C0RVGL`"
-        sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
-        threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
-        
-    elif call.data == "info_slip":
+    if call.data == "info_slip":
         msg_text = "Please upload or forward the receipt screenshot image here."
         sent = bot.send_message(call.message.chat.id, f"[PAYX-MM]\n\n{msg_text}", parse_mode="Markdown")
         threading.Thread(target=persistent_header_loop, args=(call.message.chat.id, sent.message_id, msg_text, None), daemon=True).start()
@@ -367,51 +295,12 @@ def handle_slip_verification(message):
         bot.reply_to(message, f"System Error: {str(e)}")
 
 # =====================================================================
-# /COPY REPLY HANDLER WITH NATIVE INSTANT ONE-TAP CONFIG
+# GENERAL SMART LOOKUP PARSER WITH ONE-TAP CONFIG
 # =====================================================================
-@bot.message_handler(commands=['copy'])
-def handle_reply_copy(message):
-    if not message.reply_to_message or not message.reply_to_message.text:
-        return bot.reply_to(message, "Format Warning: Reply to any context message with /copy")
+def parse_and_send_result(message, game_type, main_id, extra_id=None):
+    api_query_id = f"{main_id}/{extra_id}" if extra_id else main_id
     
-    target_text = message.reply_to_message.text
-    lines = [line.strip() for line in target_text.split('\n') if line.strip()]
-    
-    found_elements = []
-    for raw_item in lines:
-        if "/copy" in raw_item.lower() or "payx" in raw_item.lower():
-            continue
-        sub_items = [s.strip("(),. ") for s in raw_item.split() if s.strip("(),. ")]
-        for item in sub_items:
-            if item and item not in found_elements and len(item) >= 2:
-                found_elements.append(item)
-                
-    if not found_elements:
-        return bot.reply_to(message, "Error: No extractable structures identified.")
-
-    combined_text = " ".join(found_elements)
-    
-    cool_ui = (
-        f"**{BRANDING}**\n\n"
-        f"Data Pack: `{combined_text}`\n\n"
-        f"ℹ️ *Tap the data block above to copy instantly*"
-    )
-    
-    copy_markup = InlineKeyboardMarkup()
-    btn_help = InlineKeyboardButton(text="🔴 /help", callback_data="trigger_help_panel")
-    btn_delete = InlineKeyboardButton(text="Delete", callback_data="delete_msg")
-    copy_markup.row(btn_help, btn_delete)
-
-    sent_msg = bot.reply_to(message.reply_to_message, cool_ui, parse_mode="Markdown", reply_markup=copy_markup)
-    threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent_msg.message_id, cool_ui, copy_markup), daemon=True).start()
-
-# =====================================================================
-# LOOKUP PARSER WITH ONE-TAP ENGINE + CUSTOM ADMIN ASSIGNED BUTTONS
-# =====================================================================
-def parse_and_send_result(message, game_type, target_id, extra_id=None):
-    api_query_id = f"{target_id}/{extra_id}" if extra_id else target_id
-    
-    status_msg = bot.reply_to(message, "Scanning mainframe matrix...")
+    status_msg = bot.reply_to(message, f"Scanning {game_type.upper()} mainframe matrix...")
     result, error = call_game_api(game_type, api_query_id)
     
     if error:
@@ -428,8 +317,14 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
                     break
         nickname = nickname or "Verified Player"
         
-        full_id_display = f"{target_id} ({extra_id})" if extra_id else f"{target_id}"
-        payload_data = f"{nickname} {full_id_display}"
+        # Game Type အလိုက် Region/Zone ပြသပေးမှု Format အလှပြင်ဆင်ခြင်း
+        if game_type == "mlbb":
+            payload_data = f"{nickname} {main_id} ({extra_id})"
+        elif game_type == "coc":
+            payload_data = f"{nickname} #{main_id}"
+        else:
+            # FF နှင့် PUBG တို့အတွက် Name ရော ID/Region Data ပါ တွဲလျက်ပြသပေးခြင်း
+            payload_data = f"{nickname} {main_id}"
         
         cool_ui = (
             f"**{BRANDING}**\n\n"
@@ -438,14 +333,9 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         )
         
         copy_markup = InlineKeyboardMarkup()
-        btn_owner = InlineKeyboardButton(text="⚡ Admin Panel ⚡", url="https://t.me/Dominic")
-        btn_help = InlineKeyboardButton(text="🔴 /help", callback_data="trigger_help_panel")
         btn_delete = InlineKeyboardButton(text="Delete", callback_data="delete_msg")
+        copy_markup.row(btn_delete)
         
-        copy_markup.row(btn_owner)
-        copy_markup.row(btn_help, btn_delete)  # ပြုပြင်ပြီး - reply_markup ထဲမှာ ခလုတ်တွေ အလုပ်လုပ်အောင် ချိတ်ဆက်လိုက်ပါတယ်
-        
-        # FIX: reply_markup=copy_markup ကို ထည့်သွင်းပေးလိုက်လို့ အခု ခလုတ်တွေ ပေါ်လာပါလိမ့်မယ်
         bot.edit_message_text(cool_ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=copy_markup)
         
         threading.Thread(
@@ -455,32 +345,45 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
         ).start()
 
 # =====================================================================
-# COMMANDS ROUTING
+# ALL IN ONE SMART TEXT LOOKUP LISTENER (MLBB, FF, PUBG, COC AUTO-DETECT)
 # =====================================================================
-@bot.message_handler(commands=['ml'])
-def handle_ml(message):
-    match = re.search(r'/ml\s+(\d+)\s*\((.*?)\)', message.text)
-    if not match: return bot.reply_to(message, "Format Warning: Use /ml 2112723799 (19915)")
-    parse_and_send_result(message, "mlbb", match.group(1), match.group(2).strip())
+@bot.message_handler(func=lambda message: True, content_types=['text'])
+def handle_smart_game_lookups(message):
+    if message.text.startswith('/'):
+        return
 
-@bot.message_handler(commands=['ff'])
-def handle_ff(message):
-    args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /ff [UID]")
-    parse_and_send_result(message, "ff", args[1])
+    text_clean = message.text.strip()
 
-@bot.message_handler(commands=['pubg'])
-def handle_pubg(message):
-    args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /pubg [ID]")
-    parse_and_send_result(message, "pubg", args[1])
+    # 1️⃣ Rule for MLBB (ဥပမာ - 2112723799 (19915))
+    ml_match = re.search(r'^(\d+)\s*[\(\[]\s*(\d+)\s*[\)\]]$', text_clean)
+    if ml_match:
+        parse_and_send_result(message, "mlbb", ml_match.group(1), ml_match.group(2))
+        return
 
-@bot.message_handler(commands=['coc'])
-def handle_coc(message):
-    args = message.text.split()
-    if len(args) < 2: return bot.reply_to(message, "Format Warning: Use /coc [Tag]")
-    player_tag = args[1].replace("#", "").strip()
-    parse_and_send_result(message, "coc", player_tag)
+    # 2️⃣ Rule for Clash of Clans Player Tag (ဥပမာ - #20C0RVGL သို့မဟုတ် 20C0RVGL)
+    # COC tags တွေက များသောအားဖြင့် alphanumeric 7 ကနေ 9 လုံးအထိရှိပြီး # ပါတတ်ပါတယ်
+    coc_match = re.search(r'^#?([A-Z0-9]{7,12})$', text_clean, re.IGNORECASE)
+    if coc_match and not text_clean.isdigit():
+        parse_and_send_result(message, "coc", coc_match.group(1).upper())
+        return
+
+    # 3️⃣ Rule for Free Fire / PUBG Mobile (ဂဏန်းသီးသန့် 8 လုံးမှ 12 လုံးအထိ)
+    # မှတ်ချက်- MLBB ပုံစံမဟုတ်ဘဲ ဂဏန်းသီးသန့်ချည်းပဲဆိုရင် FF သို့မဟုတ် PUBG ID အဖြစ် Detect လုပ်ပါတယ်
+    if text_clean.isdigit() and 8 <= len(text_clean) <= 12:
+        # ဒီနေရာမှာ API က FF ရော PUBG ရော Host တစ်ခုတည်းက သွားတာမို့လို့ 
+        # ပုံမှန်အားဖြင့် ID checker logic အရ default တစ်ခုခု (ဥပမာ - pubg သို့မဟုတ် ff) အရင် စမ်းစစ်ခေါ်ယူပေးမှာဖြစ်ပါတယ်
+        # (အကယ်၍ API ခွဲချင်ရင် Default အနေနဲ့ PUBG အဖြစ် အရင်စစ်ပေးလိုက်ပါမယ်)
+        parse_and_send_result(message, "pubg", text_clean)
+        return
+
+    # အကယ်၍ အပေါ်က ဘယ် Regex နဲ့မှ မကိုက်ညီရင် Spam Filter Block ထဲ ပို့မယ်
+    if message.chat.type in ['group', 'supergroup'] and message.from_user.id not in ADMINS:
+        UNWANTED_PATTERNS = [r't\.me/joinchat', r't\.me/\+', r'http[s]?://', r'crypto', r'casino', r'betting']
+        for regex_item in UNWANTED_PATTERNS:
+            if re.search(regex_item, message.text, re.IGNORECASE):
+                try: bot.delete_message(message.chat.id, message.message_id)
+                except Exception: pass
+                break
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()

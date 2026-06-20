@@ -164,6 +164,12 @@ def callback_handler(call):
         except Exception: pass
         return
 
+    if call.data.startswith("copy_raw_"):
+        raw_id_payload = call.data.replace("copy_raw_", "")
+        bot.answer_callback_query(call.id, text=f"Copied Target: {raw_id_payload}", show_alert=False)
+        bot.send_message(call.message.chat.id, f"`{raw_id_payload}`", parse_mode="Markdown")
+        return
+
     bot.answer_callback_query(call.id)
 
     if call.data.startswith("adm_"):
@@ -297,17 +303,28 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
     if error: return bot.edit_message_text(f"Connection Error: {error}", message.chat.id, status_msg.message_id)
     
     nickname = None
+    region_info = ""
+    
     if result:
         nickname = result.get("nickname") or result.get("username") or result.get("name")
         if not nickname and "data" in result and isinstance(result["data"], dict):
             nickname = result["data"].get("nickname") or result["data"].get("username")
+        
+        # Region checking integration
+        zone_data = result.get("region") or result.get("zone") or result.get("zone_id")
+        if not zone_data and "data" in result and isinstance(result["data"], dict):
+            zone_data = result["data"].get("region") or result["data"].get("zone")
+        if zone_data:
+            region_info = f" | Region: {zone_data}"
+            
     nickname = nickname or "Verified Player"
     
-    payload = f"{nickname} {f'{target_id} ({extra_id})' if extra_id else target_id}"
-    ui = f"**{BRANDING}**\n\nResult: `{payload}`\n\nInfo: Tap block above to copy"
+    clean_raw_id = f"{target_id} ({extra_id})" if extra_id else target_id
+    payload = f"{nickname} {clean_raw_id}{region_info}"
+    ui = f"--- {BRANDING} ---\n{BRANDING}\n\nResult: `{payload}`\n\nInfo: Tap block above to copy"
     
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("Admin Panel", url="https://t.me/Dominic"))
+    markup.row(InlineKeyboardButton("Copy ID Only", callback_data=f"copy_raw_{clean_raw_id}"))
     markup.row(InlineKeyboardButton("Delete", callback_data="delete_msg"))
     
     bot.edit_message_text(ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=markup)

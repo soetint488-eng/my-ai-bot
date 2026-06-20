@@ -17,7 +17,7 @@ def run_flask():
 # =====================================================================
 # CONFIGURATION, TOKENS & ADMIN CONFIG
 # =====================================================================
-BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
+BOT_TOKEN = "8761954371:AAEwo75dbsAWpvxavxqWr3UbhjeRwknlWnI"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
 
@@ -28,7 +28,6 @@ bot = telebot.TeleBot(BOT_TOKEN)
 BRANDING = "PAYX-MM"
 HASH_FILE = "processed_slips.txt"
 
-# Runtime Database (လုံုံခြုံရေးနှင့် စာရင်းထိန်းသိမ်းရန်)
 MUTED_USERS = set()
 BANNED_USERS = set()
 BOT_USERS = set()
@@ -63,26 +62,21 @@ def persistent_header_loop(chat_id, message_id, base_text, markup):
 # =====================================================================
 def is_authorized(message):
     u_id = message.from_user.id
-    # Ban ထားတဲ့လူဆိုလျှင် လုံးဝအသုံးမပြုနိုင်ပါ
     if u_id in BANNED_USERS:
         return False
-    # User စာရင်းထဲသို့ ထည့်သွင်းသိမ်းဆည်းခြင်း
     BOT_USERS.add(u_id)
-    # Admin ဟုတ်မဟုတ် စစ်ဆေးခြင်း
     return u_id in ADMINS
 
 def send_restricted_access(chat_id):
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("📩 Bot Admin Request", url="https://t.me/PayX_MM"))
-    bot.send_message(chat_id, f"⚠️ **[{BRANDING} SECURITY]**\n\nသင့်တွင် ဤ Bot အား အသုံးပြုရန် ခွင့်ပြုချက်မရှိပါ။ ကျေးဇူးပြု၍ Admin ထံမှ ခွင့်ပြုချက်တောင်းခံပါ။", parse_mode="Markdown", reply_markup=markup)
+    markup.row(InlineKeyboardButton("Bot Admin Request", url="https://t.me/PayX_MM"))
+    bot.send_message(chat_id, f"--- [{BRANDING} SECURITY] ---\n\nAccess Denied. You are not authorized to use this bot. Please request permission from the administrator.", parse_mode="Markdown", reply_markup=markup)
 
-# Muted User ဝင်ရောက်ခွင့် ပိတ်ပင်ခြင်း ကြားဖြတ် Filter
 @bot.message_handler(func=lambda msg: msg.from_user.id in MUTED_USERS)
 def handle_muted_restrictions(message):
     try: bot.delete_message(message.chat.id, message.message_id)
     except Exception: pass
 
-# Group Spam Filter (လင့်ခ်နှင့် ကြော်ငြာများ ရှင်းလင်းရေး)
 UNWANTED_PATTERNS = [r't\.me/joinchat', r't\.me/\+', r'http[s]?://', r'crypto', r'casino', r'betting']
 
 @bot.message_handler(func=lambda msg: msg.chat.type in ['group', 'supergroup'])
@@ -95,7 +89,7 @@ def group_spam_moderator(message):
             break
 
 # =====================================================================
-# NATIVE TEXT GROUP MODERATION (NO BUTTONS + COMMAND & TARGET AUTO DELETE)
+# NATIVE TEXT GROUP MODERATION (NO BUTTONS + AUTO DELETE)
 # =====================================================================
 @bot.message_handler(commands=['mute'])
 def action_group_mute(message):
@@ -108,7 +102,6 @@ def action_group_mute(message):
     
     MUTED_USERS.add(target_id)
     try:
-        # Command ရိုက်တဲ့စာရော ရည်ညွှန်းခံရတဲ့စာပါ အကုန် Delete လုပ်ပေးပါမည်
         bot.delete_message(message.chat.id, message.message_id)
         bot.delete_message(message.chat.id, message.reply_to_message.message_id)
     except Exception: pass
@@ -138,14 +131,14 @@ def show_private_admin_panel(message):
         send_restricted_access(message.chat.id)
         return
     if message.chat.type != 'private':
-        return bot.reply_to(message, "ℹ️ Admin Panel ကို Bot Control Chat (PM) ထဲတွင်သာ အသုံးပြုနိုင်ပါသည်။")
+        return bot.reply_to(message, "Info: Admin Panel can only be accessed in Private Chat.")
 
-    panel_text = f"⚡ **{BRANDING} ADMIN PLAN CENTRAL** ⚡\n\nBot ကို စီမံခန့်ခွဲရန် အောက်ပါ Menu များထဲမှ စိတ်ကြိုက်ရွေးချယ်နှိပ်နိုင်ပါသည်။"
+    panel_text = f"--- {BRANDING} ADMIN PLAN CENTRAL ---\n\nSelect an option to manage the system:"
     
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("👥 Bot Users ကြည့်ရန်", callback_data="adm_view_users"), InlineKeyboardButton("🚫 Ban စာရင်းကြည့်ရန်", callback_data="adm_view_banned"))
-    markup.row(InlineKeyboardButton("✅ Unban ပြန်လုပ်ရန်", callback_data="adm_trigger_unban"), InlineKeyboardButton("➕ Admin အသစ်ထည့်ရန်", callback_data="adm_trigger_add"))
-    markup.row(InlineKeyboardButton("❌ Close Panel", callback_data="delete_msg"))
+    markup.row(InlineKeyboardButton("View Bot Users", callback_data="adm_view_users"), InlineKeyboardButton("View Banned Users", callback_data="adm_view_banned"))
+    markup.row(InlineKeyboardButton("Unban User", callback_data="adm_trigger_unban"), InlineKeyboardButton("Add New Admin", callback_data="adm_trigger_add"))
+    markup.row(InlineKeyboardButton("Close Panel", callback_data="delete_msg"))
 
     sent = bot.send_message(message.chat.id, panel_text, reply_markup=markup)
     threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, panel_text, markup), daemon=True).start()
@@ -173,28 +166,26 @@ def callback_handler(call):
 
     bot.answer_callback_query(call.id)
 
-    # Admin Panel Interactions
     if call.data.startswith("adm_"):
         if call.from_user.id not in ADMINS: return
         
         if call.data == "adm_view_users":
-            users_list = f"👥 **ACTIVE BOT USERS ({len(BOT_USERS)})**\n\n"
-            users_list += "\n".join([f"• `{u}`" for u in BOT_USERS]) if BOT_USERS else "အသုံးပြုသူ တစ်ဦးမှ မရှိသေးပါ။"
+            users_list = f"--- ACTIVE BOT USERS ({len(BOT_USERS)}) ---\n\n"
+            users_list += "\n".join([f"User ID: `{u}`" for u in BOT_USERS]) if BOT_USERS else "No users registered yet."
             bot.send_message(call.message.chat.id, users_list, parse_mode="Markdown")
             
         elif call.data == "adm_view_banned":
-            banned_list = f"🚫 **BANNED USERS ({len(BANNED_USERS)})**\n\n"
-            banned_list += "\n".join([f"• `{b}`" for b in BANNED_USERS]) if BANNED_USERS else "Ban ထားသော အသုံးပြုသူ မရှိပါ။"
+            banned_list = f"--- BANNED USERS ({len(BANNED_USERS)}) ---\n\n"
+            banned_list += "\n".join([f"User ID: `{b}`" for b in BANNED_USERS]) if BANNED_USERS else "No banned users found."
             bot.send_message(call.message.chat.id, banned_list, parse_mode="Markdown")
             
         elif call.data == "adm_trigger_unban":
-            bot.send_message(call.message.chat.id, "ℹ️ User တစ်ယောက်ကို Unban ပြန်လုပ်ရန်အတွက် `/unban [User_ID]` ဟု Format အတိုင်း စာရိုက်၍ ပို့ပေးပါ။")
+            bot.send_message(call.message.chat.id, "Use command format: /unban [User_ID]")
             
         elif call.data == "adm_trigger_add":
-            bot.send_message(call.message.chat.id, "ℹ️ Admin အသစ်တိုးမြှင့်ရန်အတွက် `/addadmin [User_ID]` ဟု Format အတိုင်း စာရိုက်၍ ပို့ပေးပါ။")
+            bot.send_message(call.message.chat.id, "Use command format: /addadmin [User_ID]")
         return
 
-    # User Game Format Guidance Buttons Response
     menus = {
         "info_ml": "--- PAYX FORMAT ---\n  /ml [User_ID] ([Zone_ID])\n-------------------\n\nExample:\n/ml `2112723799` (`19915`)",
         "info_ff": "--- PAYX FORMAT ---\n  /ff [Player_UID]\n-------------------\n\nExample:\n/ff `3108721457`",
@@ -218,7 +209,7 @@ def add_admin_privilege(message):
     try:
         target_id = int(args[1])
         ADMINS.add(target_id)
-        bot.reply_to(message, f"✅ Success: User `{target_id}` promoted to Bot Admin.", parse_mode="Markdown")
+        bot.reply_to(message, f"Success: User `{target_id}` promoted to Bot Admin.", parse_mode="Markdown")
     except ValueError: bot.reply_to(message, "Error: Invalid ID format.")
 
 @bot.message_handler(commands=['ban'])
@@ -231,7 +222,7 @@ def action_direct_ban(message):
     
     if not target_id or target_id in ADMINS: return bot.reply_to(message, "Error: Target missing or target is admin.")
     BANNED_USERS.add(target_id)
-    bot.reply_to(message, f"🚫 User `{target_id}` has been permanently banned from the Bot.", parse_mode="Markdown")
+    bot.reply_to(message, f"Success: User `{target_id}` has been permanently banned from the Bot.", parse_mode="Markdown")
 
 @bot.message_handler(commands=['unban'])
 def action_direct_unban(message):
@@ -241,7 +232,7 @@ def action_direct_unban(message):
     try:
         target_id = int(args[1])
         BANNED_USERS.discard(target_id)
-        bot.reply_to(message, f"✅ User `{target_id}` has been unbanned successfully.", parse_mode="Markdown")
+        bot.reply_to(message, f"Success: User `{target_id}` has been unbanned successfully.", parse_mode="Markdown")
     except ValueError: bot.reply_to(message, "Error: Invalid ID format.")
 
 @bot.message_handler(commands=['userinfo'])
@@ -295,7 +286,7 @@ def handle_reply_copy(message):
             if item and item not in found and len(item) >= 2: found.append(item)
     if not found: return bot.reply_to(message, "Error: No data identified.")
     
-    ui = f"**{BRANDING}**\n\nData Pack: `{' '.join(found)}`\n\nℹ️ *Tap to copy instantly*"
+    ui = f"**{BRANDING}**\n\nData Pack: `{' '.join(found)}`\n\nInfo: Tap to copy instantly"
     markup = InlineKeyboardMarkup(); markup.row(InlineKeyboardButton("Delete", callback_data="delete_msg"))
     sent = bot.reply_to(message.reply_to_message, ui, parse_mode="Markdown", reply_markup=markup)
     threading.Thread(target=persistent_header_loop, args=(message.chat.id, sent.message_id, ui, markup), daemon=True).start()
@@ -313,10 +304,10 @@ def parse_and_send_result(message, game_type, target_id, extra_id=None):
     nickname = nickname or "Verified Player"
     
     payload = f"{nickname} {f'{target_id} ({extra_id})' if extra_id else target_id}"
-    ui = f"**{BRANDING}**\n\nResult: `{payload}`\n\nℹ️ *Tap block above to copy*"
+    ui = f"**{BRANDING}**\n\nResult: `{payload}`\n\nInfo: Tap block above to copy"
     
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("⚡ Admin Panel ⚡", url="https://t.me/Dominic"))
+    markup.row(InlineKeyboardButton("Admin Panel", url="https://t.me/Dominic"))
     markup.row(InlineKeyboardButton("Delete", callback_data="delete_msg"))
     
     bot.edit_message_text(ui, message.chat.id, status_msg.message_id, parse_mode="Markdown", reply_markup=markup)
@@ -344,7 +335,6 @@ def run_start_sequence(chat_id, message_id):
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    # Admin မဟုတ်သော အခြားလူများဝင်လာပါက Request Button သာ ပြသမည်
     if not is_authorized(message):
         send_restricted_access(message.chat.id)
         return

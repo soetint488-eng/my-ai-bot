@@ -431,6 +431,6 @@ def advanced_text_router(message):
         elif 17 <= val_len <= 20: process_and_build_ui(message, "honor-of-kings", text_clean)
         return
 
-    if __name__ == "__main__":
-        threading.Thread(target=run_flask, daemon=True).start()
-        bot.infinity_polling()
+if __name__ == "__main__":
+    threading.Thread(target=run_flask, daemon=True).start()
+    bot.infinity_polling()

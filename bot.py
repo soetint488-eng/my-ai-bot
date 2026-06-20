@@ -25,18 +25,18 @@ def run_flask():
 # =====================================================================
 # CORE CONFIGURATION & CREDENTIALS
 # =====================================================================
-BOT_TOKEN = "8761954371:AAEwo75dbsAWpvxavxqWr3UbhjeRwknlWnI"
+BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
 
 # 👥 DUAL OWNERS HARDCODED SETUP
 OWNERS = {8584422107, 8033904689}
 
-# In-Memory Databases (Persistence via volatile runtime architecture)
-ADMINS = set()       # Promoted Admins list via Owners
-USER_LANG = {}       # { user_id: "EN" or "MM" }
-USER_KEYS = {}       # { user_id: { "key": str, "generated_at": float } }
-BANNED_USERS = set() # Global Banned users from key structure
+# In-Memory Databases
+ADMINS = set()       
+USER_LANG = {}       
+USER_KEYS = {}       
+BANNED_USERS = set() 
 COOLDOWN_LIMIT = 3 * 60 * 60
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -58,7 +58,7 @@ STRINGS = {
         "admin_only": "❌ Access Denied: Executive clearance required."
     },
     "MM": {
-        "welcome": "━━━━━━━━━━━━━━━━━━━━━━\n🤖 *PAYX-MM မှ ကြိုဆိုပါတယ်ဗျာ*\n━━━━━━━━━━━━━━━━━━━━━━\nမင်္ဂလာပါ {name},\nဂိမ်း ID များကို အချိန်မဆိုင်းဘဲ ချက်ချင်း ရှာဖွေပေးနိုင်ပါပြီခင်ဗျာ!\n\n💡 *အသုံးပြုနိုင်သော Commands များ:* \n🔹 `/ml`, `/Go`, `/ff`, `/cc`, `/Pg`, `/Hok`, `/Bl`",
+        "welcome": "━━━━━━━━━━━━━━━━━━━━━━\n🤖 *PAYX-MM MM မှ ကြိုဆိုပါတယ်ဗျာ*\n━━━━━━━━━━━━━━━━━━━━━━\nမင်္ဂလာပါ {name},\nဂိမ်း ID များကို အချိန်မဆိုင်းဘဲ ချက်ချင်း ရှာဖွေပေးနိုင်ပါပြီခင်ဗျာ!\n\n💡 *အသုံးပြုနိုင်သော Commands များ:* \n🔹 `/ml`, `/Go`, `/ff`, `/cc`, `/Pg`, `/Hok`, `/Bl`",
         "processing": "⚡ ဒေတာများကို ရှာဖွေစစ်ဆေးနေပါသည်...",
         "api_error": "❌ API ချိတ်ဆက်မှုပြတ်တောက်သွားခြင်း သို့မဟုတ် ID မှားယွင်းနေပါသည်။",
         "premium_locked": "🔒 ပရီမီယမ်လုပ်ဆောင်ချက်:\nဤဂိမ်းအား စစ်ဆေးရန် ပရီမီယမ် သို့မဟုတ် Admin အဆင့်ရှိရန် လိုအပ်ပါသည်။",
@@ -75,7 +75,7 @@ def get_txt(user_id, key):
     return STRINGS[lang].get(key, STRINGS["EN"][key])
 
 # =====================================================================
-# FAST UI ANIMATION ENGINE (CLEAN FRAMES)
+# FAST UI ANIMATION ENGINE
 # =====================================================================
 FAST_FRAMES = ["[ P ]", "[ PA ]", "[ PAY ]", "[ PAYX ]", "[ PAYX-MM ]"]
 
@@ -88,7 +88,7 @@ def run_fast_loading(chat_id, message_id, stop_event):
     except Exception: pass
 
 # =====================================================================
-# DYNAMIC KEYBOARD & TEXT SYSTEM UI
+# DYNAMIC KEYBOARD UI
 # =====================================================================
 def get_dynamic_keyboard(user_id):
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -108,7 +108,6 @@ def get_game_check_panel(user_id):
     lang = USER_LANG.get(user_id, "EN")
     is_authorized = (user_id in OWNERS or user_id in ADMINS)
 
-    # Grid Generation
     if is_authorized:
         markup.row(InlineKeyboardButton("🟢 Mobile Legends", callback_data="chk_mlbb"), InlineKeyboardButton("🟢 Magic Chess Go", callback_data="chk_mcgg"))
         markup.row(InlineKeyboardButton("🟢 Honor of Kings", callback_data="chk_hok"), InlineKeyboardButton("🟢 Blood Strike", callback_data="chk_bs"))
@@ -130,9 +129,6 @@ def handle_start_command(message):
     welcome_text = get_txt(user_id, "welcome").format(name=message.from_user.first_name or 'User')
     bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown", reply_markup=get_dynamic_keyboard(user_id))
 
-# =====================================================================
-# LANGUAGE SWAP LISTENER
-# =====================================================================
 @bot.message_handler(func=lambda msg: msg.text in ["🌐 Language: MM", "🌐 Language: EN"])
 def toggle_language_swap(message):
     user_id = message.from_user.id
@@ -142,9 +138,6 @@ def toggle_language_swap(message):
     confirm_txt = "🌐 Language changed to English!" if USER_LANG[user_id] == "EN" else "🌐 ဘာသာစကားအား မြန်မာလို ပြောင်းလဲလိုက်ပါပြီ။"
     bot.send_message(message.chat.id, confirm_txt, reply_markup=get_dynamic_keyboard(user_id))
 
-# =====================================================================
-# 🎁 FREE ACCESS KEY LOGIC
-# =====================================================================
 @bot.message_handler(func=lambda msg: msg.text == "🎁 Get Free Key (3 Hours)")
 def generate_free_access_key(message):
     user_id = message.from_user.id
@@ -173,17 +166,15 @@ def generate_free_access_key(message):
     generated_key = "PX-" + hashlib.md5(raw_token.encode()).hexdigest()[:12].upper()
     
     USER_KEYS[user_id] = {"key": generated_key, "generated_at": current_time}
-    
     success_msg = get_txt(user_id, "key_success").format(key=generated_key)
     bot.reply_to(message, success_msg, parse_mode="Markdown", reply_markup=get_game_check_panel(user_id))
     
-    # Send Logs to all owners safely
     for owner in OWNERS:
         try: bot.send_message(owner, f"🔔 *New Key Issued*\nUser: `{message.from_user.first_name}`\nID: `{user_id}`\nToken: `{generated_key}`", parse_mode="Markdown")
         except Exception: pass
 
 # =====================================================================
-# 👑 EXECUTIVE OWNER CONTROL DASHBOARD & MANAGEMENT
+# OWNER CONTROL PANEL
 # =====================================================================
 @bot.message_handler(func=lambda msg: msg.text == "👑 RED MATRIX PANEL")
 def trigger_owner_dashboard(message):
@@ -210,7 +201,6 @@ def trigger_owner_dashboard(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("own_") or call.data in ["delete_msg", "game_locked", "chk_mlbb", "chk_coc", "chk_ff", "chk_pubg", "chk_hok", "chk_bs", "chk_mcgg"])
 def callback_processor(call):
     user_id = call.from_user.id
-    
     if call.data == "delete_msg":
         try: bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception: pass
@@ -261,13 +251,12 @@ def callback_processor(call):
         markup.row(InlineKeyboardButton("Back", callback_data="delete_msg"))
         bot.send_message(call.message.chat.id, "🎯 *Select an Admin below to revoke/ban privileges instantly:*", parse_mode="Markdown", reply_markup=markup)
 
-# Sub-routing for Revoke Button Pressing dynamically
 @bot.callback_query_handler(func=lambda call: call.data.startswith("rev_adm_"))
 def handle_inline_revocation(call):
     if call.from_user.id not in OWNERS: return
     target_id = int(call.data.replace("rev_adm_", ""))
     ADMINS.discard(target_id)
-    BANNED_USERS.add(target_id) # Ban them dynamically
+    BANNED_USERS.add(target_id)
     bot.answer_callback_query(call.id, f"User {target_id} Revoked & Banned!", show_alert=True)
     try: bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception: pass
@@ -276,13 +265,13 @@ def process_add_admin(message):
     try:
         target_id = int(message.text.strip())
         ADMINS.add(target_id)
-        BANNED_USERS.discard(target_id) # Ensure unbanned if previously blocked
-        bot.reply_to(message, f"🎉 *Success*: User `{target_id}` promoted to Bot Admin! All games have been unlocked for them successfully.", parse_mode="Markdown")
+        BANNED_USERS.discard(target_id)
+        bot.reply_to(message, f"🎉 *Success*: User `{target_id}` promoted to Bot Admin!", parse_mode="Markdown")
     except ValueError:
         bot.reply_to(message, "⚠️ Invalid syntax. Numerical Chat IDs only.")
 
 # =====================================================================
-# MULTI-GAME ROUTER & API CONNECTOR
+# MULTI-GAME ROUTER & API CONNECTOR (FIXED FOR PROPER PARSING)
 # =====================================================================
 def call_game_api(game_type, main_id, extra_id=None):
     headers = {
@@ -320,7 +309,6 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
         buy_markup.add(InlineKeyboardButton(text="Contact Owner (Premium)", url="https://t.me/PayX_MM"))
         return bot.reply_to(message, get_txt(user_id, "access_blocked"), parse_mode="Markdown", reply_markup=buy_markup)
 
-    # Free Games Restriction Gate
     FREE_GAMES = ["mlbb", "mcgg"]
     if user_id not in OWNERS and user_id not in ADMINS and game_type not in FREE_GAMES:
         buy_markup = InlineKeyboardMarkup()
@@ -342,8 +330,27 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
         except Exception: pass
         return
         
-    nickname = raw_data.get("nickname") or raw_data.get("username") or raw_data.get("name") or "Unknown Player"
-    region = raw_data.get("region") or raw_data.get("country") or raw_data.get("zone") or "Global Server"
+    # 🔍 INTELLIGENT DEEP MULTI-LAYER KEY PARSER (FIX FOR UNKNOWN PLAYER / REGION)
+    nickname = None
+    region = None
+    
+    # Check directly from Root Level
+    nickname = raw_data.get("nickname") or raw_data.get("username") or raw_data.get("name")
+    region = raw_data.get("region") or raw_data.get("country") or raw_data.get("zone")
+    
+    # Check inside nested objects if root level keys are missing
+    for nested_key in ["data", "result", "meta"]:
+        if not nickname or not region:
+            if nested_key in raw_data and isinstance(raw_data[nested_key], dict):
+                inner = raw_data[nested_key]
+                if not nickname:
+                    nickname = inner.get("nickname") or inner.get("username") or inner.get("name")
+                if not region:
+                    region = inner.get("region") or inner.get("country") or inner.get("area") or inner.get("zone_id")
+
+    # Final Fallbacks if still not found
+    nickname = nickname or "Unknown Player"
+    region = region or "Global Server"
 
     payload_data = f"GAME  : {game_type.upper()}\nNAME  : {nickname}\nID    : {main_id}"
     if extra_id: payload_data += f" ({extra_id})"
@@ -366,7 +373,7 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
     except Exception: pass
 
 # =====================================================================
-# COMMANDS ROUTING INFRASTRUCTURE
+# COMMANDS ROUTING
 # =====================================================================
 @bot.message_handler(commands=['ml', 'Go', 'ff', 'cc', 'Pg', 'Hok', 'Bl'])
 def explicit_commands_router(message):
@@ -392,11 +399,11 @@ def explicit_commands_router(message):
         process_and_build_ui(message, "pubg", args_text)
     elif cmd == 'Hok':
         process_and_build_ui(message, "honor-of-kings", args_text)
-    elif cmd == 'Bl':
+        elif cmd == 'Bl':
         process_and_build_ui(message, "blood-strike", args_text)
 
 # =====================================================================
-# DIRECT TEXT LISTENERS & ROUTER FOR INTELLIGENT PARSING
+# DIRECT TEXT LISTENERS
 # =====================================================================
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def advanced_text_router(message):
@@ -424,6 +431,6 @@ def advanced_text_router(message):
         elif 17 <= val_len <= 20: process_and_build_ui(message, "honor-of-kings", text_clean)
         return
 
-if __name__ == "__main__":
-    threading.Thread(target=run_flask, daemon=True).start()  
+if name == "main":
+    threading.Thread(target=run_flask, daemon=True).start()
     bot.infinity_polling()

@@ -67,7 +67,7 @@ def get_dynamic_keyboard(user_id):
         btn_adm_panel = KeyboardButton("RED MATRIX PANEL (ADMIN ONLY)")
         markup.add(btn_adm_panel)
     else:
-        # Key ထုတ်သည့်နေရာတွင်သာ 🎁 အသုံးပြုထားပါသည်
+        # Key ထုတ်သည့် နေရာတစ်ခုတည်းတွင်သာ 🎁 Emoji ကို ခွင့်ပြုထားပါသည်
         btn_free_key = KeyboardButton("🎁 Get Free Key (3 Hours)")
         markup.add(btn_free_key)
         
@@ -314,8 +314,7 @@ def process_and_build_ui(message, game_type, main_id, extra_id=None):
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"```\n"
         f"{payload_data}\n"
-        f"
-```\n"
+        f"```\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"Tap dark code block area above to auto copy instantly"
     )

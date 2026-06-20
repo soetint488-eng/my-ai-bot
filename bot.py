@@ -25,7 +25,7 @@ def run_flask():
 # =====================================================================
 # CONFIGURATION, TOKENS & ADMIN CONFIG
 # =====================================================================
-BOT_TOKEN = "8761954371:AAE3NExXJOGJa1D3Lp1aN2t6F_yA8h2imOo"
+BOT_TOKEN = "8761954371:AAEwo75dbsAWpvxavxqWr3UbhjeRwknlWnI"
 RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
 RAPIDAPI_HOST = "id-game-checker.p.rapidapi.com"
 

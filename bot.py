@@ -3,7 +3,7 @@ import requests
 from telebot import types
 
 # သင်ပေးထားသော Bot Token
-BOT_TOKEN = "8702294693:AAGF_mmGKAg7-mWBuAl34jevVtDJ0mZE8HU"
+BOT_TOKEN = "8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM"
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # RapidAPI သော့ချက်များနှင့် အချက်အလက်များ

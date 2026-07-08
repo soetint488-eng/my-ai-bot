@@ -1,4 +1,3 @@
-pyrogram
-tgcrypto
+pyTelegramBotAPI
 requests
 nest_asyncio

@@ -9,7 +9,7 @@ MY_USERNAME = "love143872087742769"
 MY_PASSWORD_HASH = "c9bc87f4b03dcda196e0914af18f3fac"
 
 BOT_TOKEN = "8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM"
-YOUR_TELEGRAM_CHAT_ID = 8584422107# ⚠️ ဒီနေရာမှာ သင့်ရဲ့ Telegram User ID (ဂဏန်းတွေ) ကို ပြောင်းထည့်ပေးပါ
+YOUR_TELEGRAM_CHAT_ID =8584422107# ⚠️ ဒီနေရာမှာ သင့်ရဲ့ Telegram User ID (ဂဏန်းတွေ) ကို ပြောင်းထည့်ပေးပါ
 
 current_token = None
 

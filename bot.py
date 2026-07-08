@@ -1,17 +1,35 @@
+import os
 import time
 import asyncio
 import requests
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client
 
-# Config များ (အကုန်လုံး ထည့်ပေးထားပြီးသားဖြစ်လို့ YOUR_TELEGRAM_CHAT_ID တစ်ခုပဲ ပြောင်းပါ)
+# Config များ
 BASE_URL = "https://a1-sgp.easecdn.com/1102190223222824/lit"
 MY_USERNAME = "love143872087742769"
 MY_PASSWORD_HASH = "c9bc87f4b03dcda196e0914af18f3fac"
 
 BOT_TOKEN = "8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM"
-YOUR_TELEGRAM_CHAT_ID =8584422107# ⚠️ ဒီနေရာမှာ သင့်ရဲ့ Telegram User ID (ဂဏန်းတွေ) ကို ပြောင်းထည့်ပေးပါ
+YOUR_TELEGRAM_CHAT_ID = 8584422107  # သင့်ရဲ့ Chat ID ထည့်သွင်းပေးထားပြီးသားဖြစ်သည်
 
 current_token = None
+
+# Render Free Web Service အတွက် Dummy Web Server ပြင်ဆင်ခြင်း
+class DummyWebService(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"LitAtom Bridge Bot is running alive!")
+
+def run_dummy_server():
+    # Render က သတ်မှတ်ပေးမယ့် Port (သို့မဟုတ် Default 10000) ကို သုံးပြီး Port ဖွင့်ပေးခြင်း
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), DummyWebService)
+    print(f"🌍 Dummy Web Server started on port {port}")
+    server.serve_forever()
 
 def get_easemob_token():
     """Easemob ဆီကနေ Token တောင်းယူခြင်း"""
@@ -93,8 +111,7 @@ async def message_listener_loop(bot_client):
         # ၃ စက္ကန့်လျှင် တစ်ကြိမ် စစ်ဆေးရန်
         await asyncio.sleep(3)
 
-# Pyrogram Client - bot_token ကို တိုက်ရိုက်သုံးထားပါတယ်
-# api_id နဲ့ api_hash က bot အလုပ်လုပ်ဖို့ ပုံမှန်လိုအပ်ချက်မို့ အခြေခံ developer id တွေ ထည့်ပေးထားပါတယ်
+# Pyrogram Client Configuration
 bot = Client(
     "litatom_bridge_bot",
     api_id=2040, 
@@ -104,6 +121,11 @@ bot = Client(
 
 async def main():
     await bot.start()
+    
+    # Render အတွက် Dummy Web Port ဖွင့်လှစ်ပေးခြင်း (Exit Status 1 မဖြစ်စေရန်)
+    threading.Thread(target=run_dummy_server, daemon=True).start()
+    
+    # စာစစ်မယ့် လုပ်ငန်းစဉ်ကို Background မှာ စတင်ခြင်း
     asyncio.create_task(message_listener_loop(bot))
     print("🤖 Telegram Bot အောင်မြင်စွာ ပွင့်သွားပါပြီ။")
     await asyncio.Event().wait()

@@ -1,70 +1,114 @@
-import telebot
+import time
+import asyncio
 import requests
-from urllib.parse import quote
+from pyrogram import Client
 
-# ကိုကို ပေးထားတဲ့ Bot Token
-TOKEN = "8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM"
-bot = telebot.TeleBot(TOKEN)
+# Config များ (အကုန်လုံး ထည့်ပေးထားပြီးသားဖြစ်လို့ YOUR_TELEGRAM_CHAT_ID တစ်ခုပဲ ပြောင်းပါ)
+BASE_URL = "https://a1-sgp.easecdn.com/1102190223222824/lit"
+MY_USERNAME = "love143872087742769"
+MY_PASSWORD_HASH = "c9bc87f4b03dcda196e0914af18f3fac"
 
-# RapidAPI Credentials
-RAPIDAPI_KEY = "283b178159msh486932881be989fp157c27jsn617224a255da"
-RAPIDAPI_HOST = "pornhub-video-download-api-search-stars-tags-categories.p.rapidapi.com"
+BOT_TOKEN = "8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM"
+YOUR_TELEGRAM_CHAT_ID = 8584422107# ⚠️ ဒီနေရာမှာ သင့်ရဲ့ Telegram User ID (ဂဏန်းတွေ) ကို ပြောင်းထည့်ပေးပါ
 
-# /start ပို့ရင် ပြန်မယ့်စာ
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, "မင်္ဂလာပါဗျာ။ ပုံမှန်အချိန်မှာ အလိုအလျောက် Auto Rp ပြန်ပေးမှာဖြစ်ပြီး၊ တကယ်လို့ Pornhub ဗီဒီယိုလင့်ခ် လာပို့ရင် ဒေါင်းလုဒ်လင့်ခ် ထုတ်ပေးမှာ ဖြစ်ပါတယ်ဗျ။ ✨")
+current_token = None
 
-# စာလာသမျှကို ကိုင်တွယ်တဲ့အပိုင်း
-@bot.message_handler(func=lambda message: True)
-def handle_messages(message):
-    user_text = message.text.strip()
+def get_easemob_token():
+    """Easemob ဆီကနေ Token တောင်းယူခြင်း"""
+    url = f"{BASE_URL}/token"
+    payload = {
+        "grant_type": "password",
+        "username": MY_USERNAME,
+        "password": MY_PASSWORD_HASH
+    }
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Easemob-SDK(Android) 4.5.3"
+    }
+    try:
+        response = requests.post(url, data=payload, headers=headers)
+        if response.status_code == 200:
+            return response.json().get("access_token")
+    except Exception as e:
+        print(f"Token Error: {e}")
+    return None
+
+def check_new_messages(token):
+    """မဖတ်ရသေးသော စာအသစ်များကို လှမ်းစစ်ခြင်း"""
+    url = f"{BASE_URL}/users/{MY_USERNAME}/offline_messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "Easemob-SDK(Android) 4.5.3"
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json().get("entities", [])
+        elif response.status_code == 401:
+            return "EXPIRED"
+    except Exception as e:
+        print(f"Check Message Error: {e}")
+    return []
+
+async def message_listener_loop(bot_client):
+    """Background ကနေ စာအသစ်တွေကို ပတ်စစ်မယ့် ပတ်လမ်း (Loop)"""
+    global current_token
+    print("🚀 LitAtom App Chat Listener စတင်ပါပြီ...")
     
-    # အကယ်၍ လာပို့တဲ့စာက Pornhub လင့်ခ် ဖြစ်နေရင်
-    if "pornhub.com" in user_text:
-        bot.reply_to(message, "ခဏစောင့်ပေးပါဗျာ... ဒေါင်းလုဒ်လင့်ခ် ရှာပေးနေပါတယ်... ⏳")
+    current_token = get_easemob_token()
+    
+    while True:
+        if not current_token:
+            current_token = get_easemob_token()
+            await asyncio.sleep(5)
+            continue
+            
+        messages = check_new_messages(current_token)
         
-        try:
-            # 1. သုံးစွဲသူ ပို့လိုက်တဲ့ URL ကို API သုံးလို့ရအောင် Encode လုပ်တာပါ
-            encoded_url = quote(user_text, safe='')
+        if messages == "EXPIRED":
+            print("🔑 Token သက်တမ်းကုန်သွားသဖြင့် အသစ်ပြန်ယူနေပါသည်...")
+            current_token = get_easemob_token()
+            await asyncio.sleep(2)
+            continue
             
-            # Link ထဲက viewkey ကို ဆွဲထုတ်ခြင်း (ဥပမာ- viewkey=67722348d1efb)
-            viewkey = "default"
-            if "viewkey=" in user_text:
-                viewkey = user_text.split("viewkey=")[1].split("&")[0]
-
-            # 2. API Endpoint တည်ဆောက်ခြင်း (Format ကို 240p အပြင် တခြားဟာလည်း ပြောင်းနိုင်ပါတယ်)
-            api_url = f"https://{RAPIDAPI_HOST}/download_video/{viewkey}?url={encoded_url}&format=240"
-            
-            headers = {
-                "Content-Type": "application/json",
-                "x-rapidapi-host": RAPIDAPI_HOST,
-                "x-rapidapi-key": RAPIDAPI_KEY
-            }
-            
-            # 3. API ဆီ Request ပို့ခြင်း
-            response = requests.get(api_url, headers=headers)
-            data = response.json()
-            
-            # API က ပြန်ပေးတဲ့ Response ပုံစံပေါ်မူတည်ပြီး လင့်ခ်ကို ဆွဲထုတ်တာပါ
-            # (မှတ်ချက်- API Response ရဲ့ Key နာမည်တွေက 'download_url' သို့မဟုတ် 'url' ဖြစ်တတ်ပါတယ်)
-            download_link = data.get("download_url") or data.get("url") or data.get("link")
-            video_title = data.get("title", "ဗီဒီယို")
-
-            if download_link:
-                reply_msg = f"🎬 **{video_title}**\n\n⬇️ **ဒေါင်းလုဒ်ဆွဲရန်လင့်ခ်:**\n{download_link}"
-                bot.reply_to(message, reply_msg, parse_mode="Markdown")
-            else:
-                bot.reply_to(message, "စိတ်မရှိပါနဲ့ဗျာ၊ ဒီဗီဒီယိုအတွက် ဒေါင်းလုဒ်လင့်ခ် ရှာမတွေ့လို့ပါ သို့မဟုတ် API Limit ပြည့်သွားလို့ ဖြစ်နိုင်ပါတယ်ဗျ။")
+        if messages:
+            for msg in messages:
+                sender = msg.get("from", "Unknown User")
+                msg_body = msg.get("payload", {}).get("bodies", [{}])[0]
                 
-        except Exception as e:
-            print(f"Error: {e}")
-            bot.reply_to(message, "လင့်ခ်ထုတ်ပေးရမှာ အမှားအယွင်းတစ်ခု ရှိသွားပါတယ်ဗျာ။")
-            
-    else:
-        # Pornhub လင့်ခ် မဟုတ်ရင် ပုံမှန် မအားသေးတဲ့အကြောင်း Auto Rp ပြန်ပေးမှာပါ
-        AUTO_REPLY_TEXT = "လူကြီးမင်းခင်ဗျာ... လက်ရှိမှာ ကိုကို လိုင်းမအားသေးလို့ပါဗျာ။ အရေးကြီးရင် စာချန်ထားခဲ့ပါ၊ လိုင်းတက်လာတာနဲ့ ချက်ချင်း ပြန်စာပို့ပေးပါ့မယ်။ 🙏✨"
-        bot.reply_to(message, AUTO_REPLY_TEXT)
+                if msg_body.get("type") == "txt":
+                    chat_text = msg_body.get("msg", "")
+                    
+                    alert_message = (
+                        f"📩 **LitAtom အက်ပ်ထဲမှ စာအသစ်ရောက်လာပါသည်**\n\n"
+                        f"👤 **From ID:** `{sender}`\n"
+                        f"💬 **Message:** {chat_text}"
+                    )
+                    
+                    try:
+                        await bot_client.send_message(chat_id=YOUR_TELEGRAM_CHAT_ID, text=alert_message)
+                    except Exception as e:
+                        print(f"Telegram Send Error: {e}")
+                        
+        # ၃ စက္ကန့်လျှင် တစ်ကြိမ် စစ်ဆေးရန်
+        await asyncio.sleep(3)
 
-print("Bot စတင် အလုပ်လုပ်နေပါပြီ...")
-bot.infinity_polling()
+# Pyrogram Client - bot_token ကို တိုက်ရိုက်သုံးထားပါတယ်
+# api_id နဲ့ api_hash က bot အလုပ်လုပ်ဖို့ ပုံမှန်လိုအပ်ချက်မို့ အခြေခံ developer id တွေ ထည့်ပေးထားပါတယ်
+bot = Client(
+    "litatom_bridge_bot",
+    api_id=2040, 
+    api_hash="b18441a1d03e752e05a87c7e0932ad8e",
+    bot_token=BOT_TOKEN
+)
+
+async def main():
+    await bot.start()
+    asyncio.create_task(message_listener_loop(bot))
+    print("🤖 Telegram Bot အောင်မြင်စွာ ပွင့်သွားပါပြီ။")
+    await asyncio.Event().wait()
+
+if __name__ == "__main__":
+    import nest_asyncio
+    nest_asyncio.apply()
+    asyncio.run(main())

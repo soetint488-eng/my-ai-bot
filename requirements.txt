@@ -1,3 +1,2 @@
-pyTelegramBotAPI
-requests
-nest_asyncio
+aiogram==2.25.1
+requests==2.32.3

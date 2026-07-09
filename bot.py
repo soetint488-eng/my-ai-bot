@@ -1,10 +1,11 @@
 import logging
 import requests
 import json
+import datetime
 from aiogram import Bot, Dispatcher, executor, types
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🔑 CREDENTIALS & CONFIG (LITMATCH CODENAME: DOMINIC ENGINE v2)
+# 🔑 CREDENTIALS & CONFIG (LITMATCH CODENAME: DOMINIC ENGINE v2.1)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 API_TOKEN = '8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM'
 
@@ -37,7 +38,6 @@ def get_live_token():
         "password": LIT_PASSWORD
     }
     try:
-        # POST Request ဖြင့် Token အသစ်ကို လှမ်းတောင်းခြင်း
         response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=15)
         if response.status_code == 200:
             res_data = response.json()
@@ -54,33 +54,33 @@ def get_live_token():
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     await message.answer(
-        "👋 **Welcome to Litmatch Advanced Tracker Bot!**\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "👋 **Welcome to Litmatch Advanced Visual Tracker Bot!**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "📊 **အသုံးပြုနိုင်သည့် Command:**\n"
-        "➡️ /check - Token အသစ်ကို Auto တောင်းပြီး Live Report ထုတ်ရန်\n\n"
-        "🌌 *Powered by Dominic Auto-Login Engine*"
+        "➡️ /check - Token အသစ်ကို Auto တောင်းပြီး Advanced Visual Report ထုတ်ရန်\n\n"
+        "🌌 *Powered by Dominic Auto-Login Engine v2.1*"
     )
 
 @dp.message_handler(commands=['check'])
-async def handle_advanced_check(message: types.Message):
-    status_msg = await message.reply("🔑 **DOMINIC ENGINE: GENERATING NEW TOKEN & FETCHING DATA...**")
+async def handle_advanced_visual_check(message: types.Message):
+    status_msg = await message.reply("🔑 **DOMINIC ENGINE: GENERATING NEW TOKEN...**")
     
-    # ၁။ Token အသစ်စက်စက်ကို ဆာဗာဆီက တောင်းယူခြင်း
     new_token = get_live_token()
     
     if not new_token:
-        await bot.edit_message_text("🛑 **LOGIN FAILED:** Token generation rejected by Litmatch server. Check password/username.", message.chat.id, status_msg.message_id)
+        await bot.edit_message_text("🛑 **LOGIN FAILED:** Token generation rejected. Check password/username.", message.chat.id, status_msg.message_id)
         return
 
-    # Header တွင် Token အသစ်ကို တပ်ဆင်ခြင်း
+    await bot.edit_message_text("⚡ **TOKEN FOUND! FETCHING ADVANCED DATA...**", message.chat.id, status_msg.message_id)
+
     headers = {
         "User-Agent": "Easemob-SDK(Android) 4.5.3",
         "Authorization": f"Bearer {new_token}",
         "Content-Type": "application/json"
     }
 
-    report = "📊 **LITMATCH ADVANCED LIVE REPORT**\n"
-    report += "━━━━━━━━━━━━━━━━━━━━\n"
+    report = "🌟 **LITMATCH ADVANCED VISUAL REPORT**\n"
+    report += "━━━━━━━━━━━━━━━━━━━━━━\n"
 
     try:
         # ၂။ User Profile စစ်ဆေးခြင်း
@@ -88,18 +88,31 @@ async def handle_advanced_check(message: types.Message):
         p_res = requests.get(profile_url, headers=headers)
         if p_res.status_code == 200:
             p_data = p_res.json()
-            user_info = p_data.get("entities", [{}])[0]
-            nickname = user_info.get("nickname", "N/A")
-            activated = user_info.get("activated", "N/A")
+            
+            # 💡 Nickname Response ပုံစံသစ်အတွက် တိုးချဲ့စစ်ဆေးခြင်း
+            user_info_entities = p_data.get("entities", [{}])[0]
+            user_info_data = p_data.get("data", [{}])[0]
+            
+            nickname = user_info_entities.get("nickname") or user_info_data.get("nickname") or user_info_entities.get("username") or LIT_USERNAME
+            
+            activated = user_info_entities.get("activated", user_info_data.get("activated", "N/A"))
+            created_timestamp = user_info_entities.get("created", user_info_data.get("created"))
+            
+            account_creation_date = "N/A"
+            if created_timestamp:
+                # Timestamp ကို ပိုဖတ်ရလွယ်ကူတဲ့ Date အဖြစ် ပြောင်းလဲခြင်း
+                account_creation_date = datetime.datetime.fromtimestamp(created_timestamp/1000).strftime('%Y-%m-%d %H:%M:%S')
+
             report += f"👤 **User ID:** `{LIT_USERNAME}`\n"
             report += f"🏷️ **Nickname:** `{nickname}`\n"
+            report += f"📅 **Account Created:** `{account_creation_date}`\n"
             report += f"🟢 **Account Active:** `{activated}`\n"
         else:
             report += f"👤 **Profile:** 🛑 Fetch Failed (HTTP {p_res.status_code})\n"
 
         # ၃။ Friend List စစ်ဆေးခြင်း
         friend_url = f"{BASE_URL}/users/{LIT_USERNAME}/contacts/users"
-        f_res = requests.get(friend_url, headers=headers)
+        f_res = requests.get(friend_url, headers=HEADERS if 'HEADERS' in locals() else headers) # Handle both old/new structure
         if f_res.status_code == 200:
             f_data = f_res.json()
             friends_list = f_data.get("data", [])
@@ -107,6 +120,8 @@ async def handle_advanced_check(message: types.Message):
             if friends_list:
                 preview_friends = friends_list[:5]
                 report += f"📌 **Friend IDs:** `{', '.join(preview_friends)}`\n"
+            else:
+                report += "📌 *No friends found for this account.*\n"
         else:
             report += f"👥 **Friends:** 🛑 Fetch Failed\n"
 
@@ -117,12 +132,15 @@ async def handle_advanced_check(message: types.Message):
             s_data = s_res.json()
             status_dict = s_data.get("data", {})
             online_state = status_dict.get(LIT_USERNAME, "offline")
-            report += f"🌐 **Connection Status:** `{online_state.upper()}`\n"
+            
+            # Online Status ကို Visual Emoji ဖြင့် ဖော်ပြခြင်း
+            visual_status = "🟢 ONLINE" if online_state.lower() == "online" else "🔴 OFFLINE"
+            report += f"🌐 **Connection Status:** `{visual_status}`\n"
         else:
             report += f"🌐 **Status:** 🛑 Fetch Failed\n"
 
-        report += "━━━━━━━━━━━━━━━━━━━━\n"
-        report += "🌌 *Engine: Litmatch Token & REST Master Tuan*"
+        report += "━━━━━━━━━━━━━━━━━━━━━━\n"
+        report += "🌌 *Engine: Litmatch Advanced Visual Tuan*"
         
         await bot.edit_message_text(report, message.chat.id, status_msg.message_id)
 

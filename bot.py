@@ -5,7 +5,7 @@ import datetime
 from aiogram import Bot, Dispatcher, executor, types
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🔑 CREDENTIALS & CONFIG (DOMINIC ENGINE ULTIMATE v3.0)
+# 🔑 CREDENTIALS & CONFIG (DOMINIC ENGINE ULTIMATE v3.5)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 API_TOKEN = '8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM'
 
@@ -22,7 +22,7 @@ bot = Bot(token=API_TOKEN, parse_mode=types.ParseMode.MARKDOWN)
 dp = Dispatcher(bot)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🔑 FUNCTION: GENERATE LIVE TOKEN
+# 🔑 FUNCTION: GENERATE LIVE TOKEN (Auto-Login Engine)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def get_live_token():
     url = f"{BASE_URL}/token"
@@ -46,18 +46,22 @@ def get_live_token():
         return None
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🚀 COMMAND HANDLERS
+# 🚀 COMMAND: START
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     await message.answer(
-        "🌌 **Dominic Ultimate Litmatch Tracker Bot v3.0**\n"
+        "🌌 **Dominic Ultimate Litmatch Tracker Bot v3.5**\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📊 **အသုံးပြုနိုင်သည့် Command:**\n"
-        "➡️ /check - အကောင့်ရဲ့ Data အကုန်လုံးကို Live ဆွဲထုတ်ရန်\n\n"
-        "All-in-One Engine ဖြင့် စစ်ဆေးပေးသွားမှာ ဖြစ်ပါတယ်ဗျာ။"
+        "📊 **အသုံးပြုနိုင်သည့် Command များ:**\n"
+        "➡️ /check - အကောင့်ရဲ့ Data အကုန်လုံးကို Live ဆွဲထုတ်ရန်\n"
+        "➡️ /join [Party_ID] - သတ်မှတ်ထားသော Party ခန်းထဲသို့ Auto-Join ဝင်ရန်\n\n"
+        "All-in-One Engine ဖြင့် စစ်ဆေးမောင်းနှင်ပေးထားပါတယ်ဗျာ။"
     )
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📊 COMMAND: DATA LIVE CHECK
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 @dp.message_handler(commands=['check'])
 async def handle_ultimate_check(message: types.Message):
     status_msg = await message.reply("🔑 **DOMINIC ENGINE: AUTOLOGIN & GENERATING TOKEN...**")
@@ -154,5 +158,61 @@ async def handle_ultimate_check(message: types.Message):
     except Exception as e:
         await bot.edit_message_text(f"🛑 **ENGINE ERROR:**\n`{str(e)}`", message.chat.id, status_msg.message_id)
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎪 COMMAND: AUTO JOIN PARTY ROOM
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@dp.message_handler(commands=['join'])
+async def handle_join_party(message: types.Message):
+    args = message.get_args()
+    if not args:
+        await message.reply("❌ **ကျေးဇူးပြု၍ Party ID ထည့်ပေးပါဗျာ။**\nဥပမာ- `/join 239487529`")
+        return
+
+    party_id = args.strip()
+    status_msg = await message.reply(f"🎪 **DOMINIC ENGINE: ATTEMPTING TO JOIN PARTY [{party_id}]...**")
+
+    new_token = get_live_token()
+    if not new_token:
+        await bot.edit_message_text("🛑 **TOKEN ERROR:** Auto-login failed.", message.chat.id, status_msg.message_id)
+        return
+
+    join_url = f"{BASE_URL}/chatgroups/{party_id}/users/{LIT_USERNAME}"
+    
+    headers = {
+        "User-Agent": "Easemob-SDK(Android) 4.5.3",
+        "Authorization": f"Bearer {new_token}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(join_url, headers=headers, timeout=15)
+        
+        if response.status_code in [200, 201]:
+            await bot.edit_message_text(
+                f"🎉 **PARTY JOIN SUCCESS!**\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 **Account:** `{LIT_USERNAME}`\n"
+                f"🎪 **Joined Party ID:** `{party_id}`\n"
+                f"🟢 **Status:** အခန်းထဲသို့ အောင်မြင်စွာ ရောက်ရှိသွားပါပြီ။\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🌌 *Engine: Dominic Room Injector*",
+                message.chat.id, status_msg.message_id
+            )
+        else:
+            await bot.edit_message_text(
+                f"🛑 **PARTY JOIN FAILED!**\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"❌ **HTTP Error:** `{response.status_code}`\n"
+                f"📝 **Reason:** {response.text}\n"
+                f"💡 *Note: Party ID မှားယွင်းနေခြင်း သို့မဟုတ် Room Full ဖြစ်နေခြင်း ဖြစ်နိုင်ပါသည်။*",
+                message.chat.id, status_msg.message_id
+            )
+
+    except Exception as e:
+        await bot.edit_message_text(f"🛑 **INJECTOR CRITICAL ERROR:**\n`{str(e)}`", message.chat.id, status_msg.message_id)
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🏁 RUN ENGINE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)

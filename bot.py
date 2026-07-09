@@ -1,22 +1,21 @@
 import os
 import time
-import asyncio
-import requests
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pyrogram import Client
+import telebot
+import requests
 
-# Config များ
+# Config parameters
 BASE_URL = "https://a1-sgp.easecdn.com/1102190223222824/lit"
-MY_USERNAME = "love143872087742769"
-MY_PASSWORD_HASH = "c9bc87f4b03dcda196e0914af18f3fac"
-
 BOT_TOKEN = "8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM"
-YOUR_TELEGRAM_CHAT_ID = 8584422107  # သင့်ရဲ့ Chat ID ထည့်သွင်းပေးထားပြီးသားဖြစ်သည်
+YOUR_TELEGRAM_CHAT_ID = 8584422107
 
 current_token = None
 
-# Render Free Web Service အတွက် Dummy Web Server ပြင်ဆင်ခြင်း
+# Telebot Client initialization
+bot = telebot.TeleBot(BOT_TOKEN)
+
+# Dummy Server for Render Platform Compatibility
 class DummyWebService(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -25,19 +24,18 @@ class DummyWebService(BaseHTTPRequestHandler):
         self.wfile.write(b"LitAtom Bridge Bot is running alive!")
 
 def run_dummy_server():
-    # Render က သတ်မှတ်ပေးမယ့် Port (သို့မဟုတ် Default 10000) ကို သုံးပြီး Port ဖွင့်ပေးခြင်း
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("0.0.0.0", port), DummyWebService)
     print(f"🌍 Dummy Web Server started on port {port}")
     server.serve_forever()
 
 def get_easemob_token():
-    """Easemob ဆီကနေ Token တောင်းယူခြင်း"""
     url = f"{BASE_URL}/token"
+    # သင့်ရဲ့ Username နဲ့ Password ကို Payload ထဲမှာ တိုက်ရိုက် ထည့်သွင်းပေးထားပါသည်
     payload = {
         "grant_type": "password",
-        "username": MY_USERNAME,
-        "password": MY_PASSWORD_HASH
+        "username": "love143872087742769",
+        "password": "c9bc87f4b03dcda196e0914af18f3fac"
     }
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -52,8 +50,7 @@ def get_easemob_token():
     return None
 
 def check_new_messages(token):
-    """မဖတ်ရသေးသော စာအသစ်များကို လှမ်းစစ်ခြင်း"""
-    url = f"{BASE_URL}/users/{MY_USERNAME}/offline_messages"
+    url = f"{BASE_URL}/users/love143872087742769/offline_messages"
     headers = {
         "Authorization": f"Bearer {token}",
         "User-Agent": "Easemob-SDK(Android) 4.5.3"
@@ -68,8 +65,7 @@ def check_new_messages(token):
         print(f"Check Message Error: {e}")
     return []
 
-async def message_listener_loop(bot_client):
-    """Background ကနေ စာအသစ်တွေကို ပတ်စစ်မယ့် ပတ်လမ်း (Loop)"""
+def message_listener_loop():
     global current_token
     print("🚀 LitAtom App Chat Listener စတင်ပါပြီ...")
     
@@ -78,7 +74,7 @@ async def message_listener_loop(bot_client):
     while True:
         if not current_token:
             current_token = get_easemob_token()
-            await asyncio.sleep(5)
+            time.sleep(5)
             continue
             
         messages = check_new_messages(current_token)
@@ -86,7 +82,7 @@ async def message_listener_loop(bot_client):
         if messages == "EXPIRED":
             print("🔑 Token သက်တမ်းကုန်သွားသဖြင့် အသစ်ပြန်ယူနေပါသည်...")
             current_token = get_easemob_token()
-            await asyncio.sleep(2)
+            time.sleep(2)
             continue
             
         if messages:
@@ -104,33 +100,20 @@ async def message_listener_loop(bot_client):
                     )
                     
                     try:
-                        await bot_client.send_message(chat_id=YOUR_TELEGRAM_CHAT_ID, text=alert_message)
+                        bot.send_message(chat_id=YOUR_TELEGRAM_CHAT_ID, text=alert_message, parse_mode="Markdown")
                     except Exception as e:
                         print(f"Telegram Send Error: {e}")
                         
-        # ၃ စက္ကန့်လျှင် တစ်ကြိမ် စစ်ဆေးရန်
-        await asyncio.sleep(3)
-
-# Pyrogram Client Configuration
-bot = Client(
-    "litatom_bridge_bot",
-    api_id=2040, 
-    api_hash="b18441a1d03e752e05a87c7e0932ad8e",
-    bot_token=BOT_TOKEN
-)
-
-async def main():
-    await bot.start()
-    
-    # Render အတွက် Dummy Web Port ဖွင့်လှစ်ပေးခြင်း (Exit Status 1 မဖြစ်စေရန်)
-    threading.Thread(target=run_dummy_server, daemon=True).start()
-    
-    # စာစစ်မယ့် လုပ်ငန်းစဉ်ကို Background မှာ စတင်ခြင်း
-    asyncio.create_task(message_listener_loop(bot))
-    print("🤖 Telegram Bot အောင်မြင်စွာ ပွင့်သွားပါပြီ။")
-    await asyncio.Event().wait()
+        time.sleep(3)
 
 if __name__ == "__main__":
-    import nest_asyncio
-    nest_asyncio.apply()
-    asyncio.run(main())
+    # 1. Start Render Web Service port binding
+    threading.Thread(target=run_dummy_server, daemon=True).start()
+    
+    # 2. Start checking for background offline messages
+    threading.Thread(target=message_listener_loop, daemon=True).start()
+    
+    print("🤖 Telegram Bot အောင်မြင်စွာ ပွင့်သွားပါပြီ။")
+    
+    # 3. Maintain bot execution via polling
+    bot.infinity_polling()

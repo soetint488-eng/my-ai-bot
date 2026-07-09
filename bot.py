@@ -1,160 +1,104 @@
-import os
-import time
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import logging
 import requests
+import json
+from aiogram import Bot, Dispatcher, executor, types
 
-# Config parameters
-BASE_URL = "https://a1-sgp.easecdn.com/1102190223222824/lit"
-BOT_TOKEN = "8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM"
-YOUR_TELEGRAM_CHAT_ID = 8584422107
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🔑 TELEGRAM BOT & LITMATCH CONFIG SETUP
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+API_TOKEN = '8702294693:AAFQUh4aT3Wh5ur4XFxO5ftB_evXD_5MrFM'
 
-current_token = None
+# Litmatch credentials
+APP_KEY = "1102190223222824#lit"
+ORG_NAME, APP_NAME = APP_KEY.split("#")
+REST_SERVER = "a1-sgp-ga.easemob.com" 
+USER_ID = "love143872087742769"
+BEARER_TOKEN = "YWMt_MlvVHsvEfGJ5puF0MkOFwC3x2A3exHpkKgjudNTjb0mnqlAcGcR8ItMGWYExFEOAwMAAAGfRFmHyTht7EBFaNAbT9IyqPh6UP9LCYx3eGSeJc5D3CITerjpNxd7DA"
 
-# စကားပြောဖူးသူများနှင့် ၎င်းတို့၏ စာများကို သိမ်းဆည်းရန် Memory Database
-# { "sender_id": ["msg1", "msg2"] } ပုံစံဖြင့် သိမ်းမည်
-chat_history = {}
+BASE_URL = f"https://{REST_SERVER}/{ORG_NAME}/{APP_NAME}"
+HEADERS = {
+    "User-Agent": "Easemob-SDK(Android) 4.5.3",
+    "Authorization": f"Bearer {BEARER_TOKEN}",
+    "Content-Type": "application/json"
+}
 
-# Telebot Client initialization
-bot = telebot.TeleBot(BOT_TOKEN)
+logging.basicConfig(level=logging.INFO)
+bot = Bot(token=API_TOKEN, parse_mode=types.ParseMode.MARKDOWN)
+dp = Dispatcher(bot)
 
-# Dummy Server for Render Platform Compatibility
-class DummyWebService(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"LitAtom Bridge Bot is running alive!")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🚀 COMMANDS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    await message.answer(
+        "👋 **Welcome to Litmatch Data Checker Bot!**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📊 **အသုံးပြုနိုင်သည့် Command:**\n"
+        "➡️ /check - Litmatch အကောင့်ရဲ့ Live Data များကို လှမ်းစစ်ရန်\n\n"
+        "Dominic Engine မှ အလိုအလျောက် REST API ဆွဲထုတ်ပေးမှာ ဖြစ်ပါတယ်ဗျာ။"
+    )
 
-def run_dummy_server():
-    port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), DummyWebService)
-    print(f"🌍 Dummy Web Server started on port {port}")
-    server.serve_forever()
-
-def get_easemob_token():
-    url = f"{BASE_URL}/token"
-    payload = {
-        "grant_type": "password",
-        "username": "love143872087742769",
-        "password": "c9bc87f4b03dcda196e0914af18f3fac"
-    }
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Easemob-SDK(Android) 4.5.3"
-    }
-    try:
-        response = requests.post(url, data=payload, headers=headers)
-        if response.status_code == 200:
-            return response.json().get("access_token")
-    except Exception as e:
-        print(f"Token Error: {e}")
-    return None
-
-def check_new_messages(token):
-    url = f"{BASE_URL}/users/love143872087742769/offline_messages"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "User-Agent": "Easemob-SDK(Android) 4.5.3"
-    }
-    try:
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            return response.json().get("entities", [])
-        elif response.status_code == 401:
-            return "EXPIRED"
-    except Exception as e:
-        print(f"Check Message Error: {e}")
-    return []
-
-def message_listener_loop():
-    global current_token
-    print("🚀 LitAtom App Chat Listener စတင်ပါပြီ...")
+@dp.message_handler(commands=['check'])
+async def handle_check(message: types.Message):
+    status_msg = await message.reply("⚡ **DOMINIC ENGINE: FETCHING LITMATCH DATA...**")
     
-    current_token = get_easemob_token()
-    
-    try:
-        bot.send_message(chat_id=YOUR_TELEGRAM_CHAT_ID, text="🤖 Bot စတင်ပွင့်ပါပြီ။ စကားပြောဖူးသူများကို ကြည့်ရန် /users ဟု ရိုက်နှိပ်ပါ။")
-    except Exception as e:
-        print(f"Telegram Initial Send Error: {e}")
+    report = "📊 **LITMATCH LIVE REPORT**\n"
+    report += "━━━━━━━━━━━━━━━━━━━━\n"
 
-    while True:
-        if not current_token:
-            current_token = get_easemob_token()
-            time.sleep(5)
-            continue
-            
-        messages = check_new_messages(current_token)
+    try:
+        # ၁။ User Profile စစ်ဆေးခြင်း
+        profile_url = f"{BASE_URL}/users/{USER_ID}"
+        p_res = requests.get(profile_url, headers=HEADERS)
+        if p_res.status_code == 200:
+            p_data = p_res.json()
+            user_info = p_data.get("entities", [{}])[0]
+            nickname = user_info.get("nickname", "N/A")
+            activated = user_info.get("activated", "N/A")
+            report += f"👤 **User ID:** `{USER_ID}`\n"
+            report += f"🏷️ **Nickname:** `{nickname}`\n"
+            report += f"🟢 **Account Active:** `{activated}`\n"
+        else:
+            report += f"👤 **Profile:** 🛑 Fetch Failed (HTTP {p_res.status_code})\n"
+
+        # ၂။ Friend List စစ်ဆေးခြင်း
+        friend_url = f"{BASE_URL}/users/{USER_ID}/contacts/users"
+        f_res = requests.get(friend_url, headers=HEADERS)
+        if f_res.status_code == 200:
+            f_data = f_res.json()
+            friends_list = f_data.get("data", [])
+            report += f"👥 **Total Friends:** `{len(friends_list)}`\n"
+            if friends_list:
+                # ပထမဆုံး သူငယ်ချင်း ၅ ယောက်ရဲ့ ID ကို ပြပေးရန်
+                preview_friends = friends_list[:5]
+                report += f"📌 **Friend IDs (Top 5):** `{', '.join(preview_friends)}`\n"
+        else:
+            report += f"👥 **Friends:** 🛑 Fetch Failed\n"
+
+        # ၃။ Online Status စစ်ဆေးခြင်း
+        status_url = f"{BASE_URL}/users/{USER_ID}/status"
+        s_res = requests.get(status_url, headers=HEADERS)
+        if s_res.status_code == 200:
+            s_data = s_res.json()
+            status_dict = s_data.get("data", {})
+            online_state = status_dict.get(USER_ID, "offline")
+            report += f"🌐 **Connection Status:** `{online_state.upper()}`\n"
+        else:
+            report += f"🌐 **Status:** 🛑 Fetch Failed\n"
+
+        report += "━━━━━━━━━━━━━━━━━━━━\n"
+        report += "🌌 *Engine: Litmatch REST Checker Tuan*"
         
-        if messages == "EXPIRED":
-            current_token = get_easemob_token()
-            time.sleep(2)
-            continue
-            
-        if isinstance(messages, list) and messages:
-            for msg in messages:
-                sender = msg.get("from", "Unknown User")
-                
-                payload = msg.get("payload", {})
-                bodies = payload.get("bodies", [{}])
-                msg_body = bodies[0] if bodies else {}
-                chat_text = msg_body.get("msg", "")
-                
-                if not chat_text:
-                    chat_text = msg.get("msg", "Media/Unknown Message")
+        await bot.edit_message_text(report, message.chat.id, status_msg.message_id)
 
-                # စကားပြောဖူးသူစာရင်းထဲ ထည့်ပြီး စာကိုပါ သိမ်းဆည်းခြင်း
-                if sender not in chat_history:
-                    chat_history[sender] = []
-                chat_history[sender].append(chat_text)
-                
-                # Notification အသစ်တက်လာတိုင်းလည်း အသိပေးမည်
-                alert_message = f"📩 **စာအသစ်ရောက်သည်**\n👤 `{sender}`: {chat_text}"
-                try:
-                    bot.send_message(chat_id=YOUR_TELEGRAM_CHAT_ID, text=alert_message)
-                except Exception as e:
-                    print(f"Telegram Send Error: {e}")
-                        
-        time.sleep(3)
+    except Exception as e:
+        await bot.edit_message_text(
+            f"🛑 **CRITICAL ENGINE ERROR:**\n`{str(e)}`", 
+            message.chat.id, status_msg.message_id
+        )
 
-# --- Telegram Bot Commands & Buttons Handling ---
-
-# /users ရိုက်ရင် ပြပေးမယ့် Button စနစ်
-@bot.message_handler(commands=['users'])
-def send_users_buttons(message):
-    if message.chat.id != YOUR_TELEGRAM_CHAT_ID:
-        return
-
-    if not chat_history:
-        bot.reply_to(message, "📭 သင့်ထံ စာပို့ဖူးသည့် User မရှိသေးပါခင်ဗျာ။")
-        return
-
-    markup = InlineKeyboardMarkup()
-    # စကားပြောဖူးသူ တစ်ယောက်ချင်းစီအတွက် Button တစ်ခုစီ ဆောက်ခြင်း
-    for user_id in chat_history.keys():
-        btn = InlineKeyboardButton(text=f"👤 {user_id}", callback_data=f"view_{user_id}")
-        markup.add(btn)
-
-    bot.send_message(message.chat.id, "👇 စကားပြောဖူးသူများစာရင်း ဖြစ်ပါသည်။ စာများဖတ်ရန် နာမည်ကို နှိပ်ပါ -", reply_markup=markup)
-
-# Button နှိပ်လိုက်ရင် အလုပ်လုပ်မယ့် စနစ်
-@bot.callback_query_handler(func=lambda call: call.data.startswith('view_'))
-def view_user_chat(call):
-    user_id = call.data.split('_')[1]
-    
-    if user_id in chat_history and chat_history[user_id]:
-        all_msgs = "\n".join([f"- {m}" for m in chat_history[user_id]])
-        response_text = f"💬 **User `{user_id}` မှ ပေးပို့ထားသော စာများ:**\n\n{all_msgs}"
-    else:
-        response_text = f"📭 User `{user_id}` ထံမှ စာမှတ်တမ်း မရှိသေးပါ။"
-
-    bot.send_message(call.message.chat.id, response_text)
-    bot.answer_callback_query(call.id) # Button loading ပျောက်အောင် လုပ်ခြင်း
-
-if __name__ == "__main__":
-    threading.Thread(target=run_dummy_server, daemon=True).start()
-    threading.Thread(target=message_listener_loop, daemon=True).start()
-    print("🤖 Telegram Bot အောင်မြင်စွာ ပွင့်သွားပါပြီ။")
-    bot.infinity_polling()
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🏁 RUN POLLING
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)

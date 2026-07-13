@@ -3,7 +3,7 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ၁။ Telegram Bot အချက်အလက်များ ဖြည့်ရန်
-TOKEN = "8702294693:AAGyc787bFvYl5vvNJVajSE5cu5lYcgI_ok"
+TOKEN = "8702294693:AAHFj1uHEkpBfUVd9CTu2d7x3O_O767bxA8"
 bot = telebot.TeleBot(TOKEN)
 
 # ၂။ Slot API အချက်အလက်များ

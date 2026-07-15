@@ -9,7 +9,7 @@ TELEGRAM_BOT_TOKEN = "8702294693:AAHFj1uHEkpBfUVd9CTu2d7x3O_O767bxA8"  # အခ�
 GITHUB_TOKEN = "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"
 GITHUB_REPO = "soetint488-eng/my-bot" # ဥပမာ "soetint488-eng/my-bot"
 RENDER_TOKEN = "rnd_GOBH4mR6EnE1EXNLusEf32gKQ3P7"
-RENDER_SERVICE_ID = "YOUR_RENDER_SERVICE_ID" # srv-xxxxxx (စောစောက ရှာထားတဲ့ ID)
+RENDER_SERVICE_ID = "srv-d67o32a4d50c73aibe80" # srv-xxxxxx (စောစောက ရှာထားတဲ့ ID)
 
 # ယာယီ Data သိမ်းရန် (File ပြင်တဲ့အခါ သုံးဖို့)
 USER_STATES = {}

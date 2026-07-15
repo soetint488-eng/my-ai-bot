@@ -5,9 +5,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # --- CONFIGURATION ---
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # အခုဆောက်နေတဲ့ Admin Bot Token
+TELEGRAM_BOT_TOKEN = "8702294693:AAHFj1uHEkpBfUVd9CTu2d7x3O_O767bxA8"  # အခုဆောက်နေတဲ့ Admin Bot Token
 GITHUB_TOKEN = "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"
-GITHUB_REPO = "YOUR_GITHUB_USERNAME/YOUR_REPO_NAME" # ဥပမာ "soetint488-eng/my-bot"
+GITHUB_REPO = "soetint488-eng/my-bot" # ဥပမာ "soetint488-eng/my-bot"
 RENDER_TOKEN = "rnd_GOBH4mR6EnE1EXNLusEf32gKQ3P7"
 RENDER_SERVICE_ID = "YOUR_RENDER_SERVICE_ID" # srv-xxxxxx (စောစောက ရှာထားတဲ့ ID)
 

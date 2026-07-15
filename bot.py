@@ -1,183 +1,162 @@
-import logging
-import asyncio
-import aiohttp
-import random
-from datetime import datetime
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+import os
+import requests
+import base64
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🔑 CONFIGURATION
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-API_TOKEN = '8702294693:AAHFj1uHEkpBfUVd9CTu2d7x3O_O767bxA8'
-TARGET_API_URL = "http://13.251.67.72:8865/api/Async/com.fsf.gfh.jhg"
-HEADERS = {
-    "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 8.1.0; vivo 1807 Build/OPM1.171019.026)",
-    "Accept-Encoding": "identity",
-    "Connection": "Keep-Alive"
-}
+# --- CONFIGURATION ---
+TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # အခုဆောက်နေတဲ့ Admin Bot Token
+GITHUB_TOKEN = "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"
+GITHUB_REPO = "YOUR_GITHUB_USERNAME/YOUR_REPO_NAME" # ဥပမာ "soetint488-eng/my-bot"
+RENDER_TOKEN = "rnd_GOBH4mR6EnE1EXNLusEf32gKQ3P7"
+RENDER_SERVICE_ID = "YOUR_RENDER_SERVICE_ID" # srv-xxxxxx (စောစောက ရှာထားတဲ့ ID)
 
-logging.basicConfig(level=logging.INFO)
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+# ယာယီ Data သိမ်းရန် (File ပြင်တဲ့အခါ သုံးဖို့)
+USER_STATES = {}
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🎰 FUNCTION: REAL-TIME RTP & TIME SLOTS CALCULATOR
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def calculate_realtime_slot(pkg_name):
-    current_hour = datetime.now().hour
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    
-    random.seed(f"{pkg_name}-{today_str}-{current_hour}")
-    current_rtp = round(random.uniform(89.0, 98.5), 2)
-    
-    start_time = f"{current_hour:02d}:00"
-    end_time = f"{(current_hour + 1) % 24:02d}:00"
-    lucky_slot = f"⏰ {start_time} - {end_time}"
-    
-    return lucky_slot, current_rtp
+# --- HELPER FUNCTIONS ---
+def get_github_headers():
+    return {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🌐 FUNCTION: FETCH ALL DATA FROM SLOT API
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async def fetch_slot_api_payload():
-    timeout = aiohttp.ClientTimeout(total=8)
-    try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(TARGET_API_URL, headers=HEADERS) as response:
-                if response.status == 200:
-                    api_data = await response.json()
-                    return api_data, "OK"
-                else:
-                    return None, f"HTTP Error {response.status}"
-    except Exception as e:
-        return None, str(e)
+def get_render_headers():
+    return {
+        "Authorization": f"Bearer {RENDER_TOKEN}",
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🎨 FUNCTION: GENERATE UI REPORT & KEYBOARD BUTTONS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def generate_ui_report(api_data):
-    # API ကနေ ပါသမျှ Data အကုန် ဆွဲထုတ်ခြင်း
-    pkg_name = api_data.get('package_name', 'Unknown')
-    login_ip = api_data.get('login_ip', 'Not Found')
-    port = api_data.get('port', 'Unknown')
-    lang = api_data.get('language', 'mm')
-    region = api_data.get('region', 'mm')
-    desc = api_data.get('desc', 'N/A')
-    download_url = api_data.get('login_download_url', '#')
-    version = api_data.get('login_version', '1.0.0')
-    
-    # API ထဲတွင် Balance သို့မဟုတ် Gold ပါခဲ့လျှင် ဆွဲထုတ်ရန် (မပါက Dummy ပြသထားမည်)
-    account_balance = api_data.get('balance', '15,500 MMK')
-    gold_amount = api_data.get('gold', '4,800 Gold')
-    
-    # Dynamic RTP နှင့် အချိန်တွက်ချက်မှု
-    lucky_slot, rtp_rate = calculate_realtime_slot(pkg_name)
-    status_text = "🟢 အောင်မြင်သည် (နိုင်ချေ မြင့်မားသည်)" if rtp_rate > 93 else "🟡 ပုံမှန်အခြေအနေ"
-    
-    report = (
-        "🎰 <b>DOMINIC SLOT REAL-TIME ENGINE</b> 🎰\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📊 <b>Status:</b> {status_text}\n"
-        f"📦 <b>Package:</b> <code>{pkg_name}</code>\n"
-        f"📱 <b>Version:</b> <code>{version}</code>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📡 <b>NETWORK & SERVER INFO</b>\n"
-        f"🌐 <b>Host IP:</b> <code>{login_ip}</code>\n"
-        f"🔌 <b>Port:</b> <code>{port}</code>\n"
-        f"🌍 <b>Region:</b> <code>{region.upper()}</code> ({lang})\n"
-        f"📝 <b>Description:</b> <code>{desc}</code>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💰 <b>USER WALLET ACCOUNT</b>\n"
-        f"💵 <b>Balance:</b> <code>{account_balance}</code>\n"
-        f"🟡 <b>Gold Amount:</b> <code>{gold_amount}</code>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🔥 <b>LIVE PREDICTION ANALYSIS</b>\n"
-        f"📈 <b>RTP Rate:</b> 🌟 <code>{rtp_rate}%</code>\n"
-        f"⚡ <b>ကစားရန်အချိန်ကောင်း:</b> {lucky_slot}\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "⚠️ <i>RTP နှင့် အချက်အလက်များသည် မိနစ်/နာရီအလိုက် အလိုအလျောက် ပြောင်းလဲနေပါသည်။</i>"
-    )
-    
-    # Inline Buttons ဖန်တီးခြင်း
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        types.InlineKeyboardButton(text="🔄 Live Check Update", callback_data="refresh_slot"),
-        types.InlineKeyboardButton(text="🟡 Gold Request", callback_data="gold_request")
-    )
-    builder.row(
-        types.InlineKeyboardButton(text="🌐 Download App", url=download_url)
-    )
-    
-    return report, builder.as_markup()
+# --- BOT COMMANDS & HANDLERS ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Main Menu ပြသခြင်း"""
+    keyboard = [
+        [InlineKeyboardButton("📁 GitHub Folder Code", callback_data="view_folder")],
+        [InlineKeyboardButton("🚀 Render Run (Clear & Restart)", callback_data="render_run")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("🎛️ **Admin Control Panel**\nအောက်က ခလုတ်များကို နှိပ်၍ စီမံနိုင်သည်၊", reply_markup=reply_markup, parse_mode="Markdown")
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🚀 COMMAND: START / SLOT ENTRY POINT
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-@dp.message(Command("start"))
-@dp.message(Command("slot"))
-async def handle_slot_command(message: types.Message):
-    status_msg = await message.reply("📡 <b>API ဆာဗာမှ ဒေတာများ ဆွဲထုတ်နေပါသည်...</b>", parse_mode="HTML")
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    # 1. GitHub Folder ရှိ File များစာရင်းကို Button အနေနဲ့ပြခြင်း
+    if data == "view_folder":
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/"
+        res = requests.get(url, headers=get_github_headers())
+        
+        if res.status_code == 200:
+            files = res.json()
+            keyboard = []
+            for f in files:
+                if f['type'] == 'file': # ဖိုင်ဆိုရင် ရွေးလို့ရအောင် Button လုပ်မည်
+                    keyboard.append([InlineKeyboardButton(f"📄 {f['name']}", callback_data=f"file_{f['path']}")])
+            
+            keyboard.append([InlineKeyboardButton("⬅️ Back to Menu", callback_data="main_menu")])
+            await query.edit_message_text("📂 **GitHub ထဲရှိ ဖိုင်များ စာရင်း:**\nကုဒ်ကြည့်ရန် သို့မဟုတ် ပြင်ဆင်ရန် ဖိုင်ကိုနှိပ်ပါ၊", 
+                                          reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        else:
+            await query.edit_message_text("❌ GitHub ကနေ File List ဆွဲမရဖြစ်နေသည်။")
+
+    # 2. ရွေးလိုက်တဲ့ File ကို Telegram ထံ စာသားဖိုင်အနေနဲ့ ပို့ပေးခြင်း
+    elif data.startswith("file_"):
+        file_path = data.split("_", 1)[1]
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+        res = requests.get(url, headers=get_github_headers())
+        
+        if res.status_code == 200:
+            file_data = res.json()
+            # Base64 ကနေ စာသားအဖြစ် ပြောင်းလဲခြင်း
+            code_content = base64.b64decode(file_data['content']).decode('utf-8')
+            sha = file_data['sha']
+            
+            # ဖိုင်ကို ဆောက်ပြီး user ဆီ ပို့ပေးခြင်း
+            local_filename = file_path.split("/")[-1]
+            with open(local_filename, "w", encoding="utf-8") as f:
+                f.write(code_content)
+                
+            # နောက်တစ်ကြိမ် ဖိုင်ပြန်ပို့ရင် auto-upload လုပ်နိုင်အောင် state မှတ်ထားခြင်း
+            USER_STATES[query.from_user.id] = {"editing_file": file_path, "sha": sha}
+            
+            await query.message.reply_document(document=open(local_filename, 'rb'), 
+                                               caption=f"📝 **{file_path}** ကို ပို့ပေးထားသည်။\n\n⚠️ **ပြင်ဆင်နည်း:** ဤဖိုင်ကို ဒေါင်းလုဒ်လုပ်၊ ကုဒ်များပြင်ဆင်ပြီး ဤ Bot ထံသို့ `.py` သို့မဟုတ် သက်ဆိုင်ရာဖိုင်အလိုက် **File အနေဖြင့် ပြန်လည် ပို့ပေးပါ** (Auto Upload တင်ပေးမည်)။")
+            os.remove(local_filename)
+        else:
+            await query.edit_message_text("❌ ဖိုင်အကြောင်းအရာကို ဆွဲယူ၍မရပါ။")
+
+    # 3. Render မှာ Auto Clear Cache & Deploy (Run) လုပ်ခြင်း
+    elif data == "render_run":
+        await query.edit_message_text("⏳ Render Engine ကို ရှင်းလင်းပြီး ပြန်လည်ပတ်နေပါသည်...")
+        
+        url = f"https://api.render.com/v1/services/{RENDER_SERVICE_ID}/deploys"
+        # clearCache: "clear" ထည့်ခြင်းဖြင့် ယခင် build အဟောင်းတွေကို ရှင်းထုတ်ပြီး အသစ် run စေပါသည်
+        payload = {"clearCache": "clear"} 
+        res = requests.post(url, json=payload, headers=get_render_headers())
+        
+        if res.status_code == 201:
+            # အောင်မြင်လျှင် ပြသမည့် animation animation နှင့် message
+            await query.edit_message_text("✨🚀 **SUCCESSFUL!** 🚀✨\n\nRender Service ကို Auto Clear လုပ်ပြီး အောင်မြင်စွာ စတင်မောင်းနှင်လိုက်ပါပြီ။\nBot ပြန်တက်လာရန် စက္ကန့်ပိုင်း စောင့်ပါ။")
+        else:
+            # Error ဖြစ်ရင် စာသား ကော်ပီကူးရလွယ်အောင် backtick (code text) နဲ့ ပြပေးခြင်း
+            error_details = res.text
+            await query.edit_message_text(f"❌ **Render Error ဖြစ်သွားပါသည်!**\n\nError Code ကို အောက်တွင် Copy ကူးနိုင်သည်-\n```text\nStatus: {res.status_code}\n{error_details}\n```", parse_mode="Markdown")
+
+    elif data == "main_menu":
+        keyboard = [
+            [InlineKeyboardButton("📁 GitHub Folder Code", callback_data="view_folder")],
+            [InlineKeyboardButton("🚀 Render Run (Clear & Restart)", callback_data="render_run")]
+        ]
+        await query.edit_message_text("🎛️ **Admin Control Panel**", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+# 4. User ထံမှ ပြန်ပို့လာသော ပြင်ဆင်ပြီးသား File ကို လက်ခံပြီး GitHub သို့ Auto Upload (Commit) တင်ပေးခြင်း
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
     
-    api_data, status = await fetch_slot_api_payload()
-    if not api_data:
-        await bot.edit_message_text(
-            text=f"🛑 <b>API ချိတ်ဆက်မှု ပျက်ကွက်ပါသည်</b>\n❌ အကြောင်းရင်း: <code>{status}</code>",
-            chat_id=message.chat.id,
-            message_id=status_msg.message_id,
-            parse_mode="HTML"
-        )
+    # ဤ User သည် ဖိုင်ပြင်ဆင်နေဆဲ ဟုတ်/မဟုတ် စစ်ဆေးခြင်း
+    if user_id not in USER_STATES or "editing_file" not in USER_STATES[user_id]:
+        await update.message.reply_text("❌ ကျေးဇူးပြု၍ အရင်ဆုံး 'GitHub Folder Code' မှတစ်ဆင့် ပြင်ချင်သော ဖိုင်ကို အရင်ရွေးချယ်ပါ။")
         return
         
-    text, reply_markup = generate_ui_report(api_data)
-    await bot.edit_message_text(
-        text=text,
-        chat_id=message.chat.id,
-        message_id=status_msg.message_id,
-        parse_mode="HTML",
-        reply_markup=reply_markup,
-        disable_web_page_preview=True
-    )
+    file_path = USER_STATES[user_id]["editing_file"]
+    old_sha = USER_STATES[user_id]["sha"]
+    
+    # Telegram ဆာဗာမှ ဖိုင်ကို ဒေါင်းလုဒ်လုပ်ခြင်း
+    doc = update.message.document
+    telegram_file = await context.bot.get_file(doc.file_id)
+    
+    # ဖတ်ပြီး content အား string ပြောင်းခြင်း
+    file_bytes = requests.get(telegram_file.file_path).content
+    encoded_content = base64.b64encode(file_bytes).decode('utf-8')
+    
+    # GitHub သို့ API ဖြင့် ပြန်လည် Upload (PUT request) လုပ်ခြင်း
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+    payload = {
+        "message": f"🤖 Auto updated via Telegram Admin Bot",
+        "content": encoded_content,
+        "sha": old_sha
+    }
+    
+    res = requests.put(url, json=payload, headers=get_github_headers())
+    
+    if res.status_code == 200 or res.status_code == 201:
+        await update.message.reply_text("🎉✨ **SUCCESSFUL!** ✨🎉\n\nကုဒ်အသစ်ကို GitHub ပေါ်သို့ Auto Upload တင်ပေးလိုက်ပါပြီ။ Render တွင် အလုပ်လုပ်ရန် 'Render Run' ခလုတ်ကို နှိပ်နိုင်ပါသည်။")
+        # state ကို ရှင်းထုတ်ခြင်း
+        del USER_STATES[user_id]
+    else:
+        await update.message.reply_text(f"❌ GitHub သို့ Upload တင်ရာတွင် အမှားအယွင်းရှိခဲ့သည်။\n```text\n{res.text}\n```", parse_mode="Markdown")
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🔄 CALLBACK: REFRESH BUTTON DATA HANDLER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-@dp.callback_query(lambda c: c.data == "refresh_slot")
-async def handle_refresh_callback(callback_query: types.CallbackQuery):
-    api_data, status = await fetch_slot_api_payload()
-    if not api_data:
-        await callback_query.answer(f"❌ API Error: {status}", show_alert=True)
-        return
-        
-    text, reply_markup = generate_ui_report(api_data)
-    try:
-        await bot.edit_message_text(
-            text=text,
-            chat_id=callback_query.message.chat.id,
-            message_id=callback_query.message.message_id,
-            parse_mode="HTML",
-            reply_markup=reply_markup,
-            disable_web_page_preview=True
-        )
-        await callback_query.answer("📊 ဒေတာအားလုံးကို Real-Time အသစ်ပြင်ဆင်ပြီးပါပြီ။")
-    except Exception:
-        await callback_query.answer("⚡ နောက်ဆုံးရ ဒေတာများကို ပြသနေဆဲဖြစ်သည်။")
+def main():
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    
+    print("Admin Bot စတင်အလုပ်လုပ်နေပါပြီ...")
+    application.run_polling()
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🟡 CALLBACK: GOLD REQUEST BUTTON HANDLER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-@dp.callback_query(lambda c: c.data == "gold_request")
-async def handle_gold_callback(callback_query: types.CallbackQuery):
-    # Gold Request လုပ်ဆောင်ချက်အတွက် (လက်ရှိ စမ်းသပ်ချက်အဖြစ် ပြသခြင်း)
-    await callback_query.answer("🟡 Gold Request အောင်မြင်ပါသည်။ အကောင့်ထဲသို့ ရွှေများ ထည့်သွင်းနေပါသည်...", show_alert=True)
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🏁 RUN ENGINE
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async def main():
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
-
-if __name__ == '__main__':
-    asyncio.run(main())
+if __name__ == "__main__":
+    main()
